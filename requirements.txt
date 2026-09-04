@@ -1,0 +1,7 @@
+flask
+flask-cors
+python-socketio
+faster-whisper
+sounddevice
+numpy
+pynput

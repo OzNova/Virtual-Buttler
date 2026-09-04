@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Butler — AI Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0e17;
+      --bg-secondary: #111827;
+      --fg: #e8edf5;
+      --muted: #6b7a90;
+      --accent: #00d4aa;
+      --accent-dim: rgba(0, 212, 170, 0.12);
+      --card: #161c2c;
+      --border: rgba(0, 212, 170, 0.18);
+      --error: #ff4757;
+      --success: #00d4aa;
+      --warning: #f6ad55;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      height: 100%;
+    }
+
+    body {
+      min-height: 100%;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .bg-pattern {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 212, 170, 0.08), transparent 50%),
+        radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0, 100, 150, 0.06), transparent 50%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-secondary) 100%);
+      z-index: 0;
+    }
+
+    .grid-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: 
+        linear-gradient(rgba(0, 212, 170, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 170, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      z-index: 1;
+    }
+
+    .main {
+      position: relative;
+      z-index: 2;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px 20px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--accent), #00a896);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-icon svg {
+      width: 24px;
+      height: 24px;
+      filter: drop-shadow(0 0 12px rgba(0, 212, 170, 0.5));
+    }
+
+    .logo-text {
+      font-family: 'Inter', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-text span {
+      color: var(--accent);
+    }
+
+    .header-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse-soft 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-soft {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .status-text {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg);
+    }
+
+    .btn-primary:hover {
+      background: #00e5bb;
+      box-shadow: 0 4px 20px rgba(0, 212, 170, 0.3);
+    }
+
+    .btn-secondary {
+      background: var(--card);
+      color: var(--fg);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-danger {
+      background: rgba(255, 71, 87, 0.1);
+      color: var(--error);
+      border: 1px solid rgba(255, 71, 87, 0.3);
+    }
+
+    .btn-danger:hover {
+      background: rgba(255, 71, 87, 0.2);
+      border-color: var(--error);
+    }
+
+    .voice-indicator {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .voice-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--muted);
+      animation: voice-dot 0.5s ease-in-out infinite;
+    }
+
+    @keyframes voice-dot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.5); opacity: 0.5; }
+    }
+
+    .voice-dot.recording {
+      background: var(--error);
+      animation: none;
+    }
+
+    .status-panel {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .status-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .status-item-value {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .status-item-label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .chat-area {
+      flex: 1;
+      overflow-y: auto;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    .message {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .message.user {
+      flex-direction: row-reverse;
+    }
+
+    .message-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .message-avatar.user {
+      background: var(--accent);
+      color: var(--bg);
+    }
+
+    .message-avatar.assistant {
+      background: var(--card);
+      color: var(--muted);
+    }
+
+    .message-bubble {
+      max-width: 70%;
+      padding: 12px 16px;
+      border-radius: 16px;
+      line-height: 1.5;
+    }
+
+    .message-bubble.user {
+      background: var(--accent);
+      color: var(--bg);
+    }
+
+    .message-bubble.assistant {
+      background: var(--card);
+      color: var(--fg);
+    }
+
+    .message-meta {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .message-meta.user {
+      text-align: right;
+    }
+
+    .input-area {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    .input-field {
+      flex: 1;
+      padding: 12px 16px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--fg);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      resize: none;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .input-field:focus {
+      border-color: var(--accent);
+    }
+
+    .input-field::placeholder {
+      color: var(--muted);
+    }
+
+    .send-btn {
+      padding: 0 24px;
+    }
+
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .quick-action {
+      padding: 16px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .quick-action:hover {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .quick-action svg {
+      width: 28px;
+      height: 28px;
+      color: var(--accent);
+    }
+
+    .system-info {
+      margin-top: 24px;
+      padding: 20px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .system-info h3 {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 16px;
+    }
+
+    .system-info ul {
+      list-style: none;
+    }
+
+    .system-info li {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .system-info .key {
+      color: var(--muted);
+    }
+
+    .system-info .value {
+      color: var(--fg);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .voice-dot {
+        animation: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-pattern"></div>
+  <div class="grid-overlay"></div>
+
+  <div class="main">
+    <header class="header">
+      <div class="logo">
+        <div class="logo-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M5 3v6h14V3H5z"/></svg></div>
+        <div class="logo-text">Virtual Butler</div>
+      </div>
+      <div class="header-info">
+        <div class="status-dot" id="status-dot"></div>
+        <div class="status-text" id="status-text">Disconnected</div>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="card-title">Conversation</div>
+      <div class="chat-area" id="chat-area">
+        <div class="message assistant">
+          <div class="message-avatar assistant">BUT</div>
+          <div class="message-bubble assistant">
+            Hello sir! Virtual Butler is ready. How may I assist you today?
+          </div>
+          <div class="message-meta assistant">Just now</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Command</div>
+      <div class="input-area">
+        <textarea class="input-field" id="command-input" placeholder="Type your command..." rows="1" spellcheck="false"></textarea>
+        <button class="btn btn-primary send-btn" id="send-btn">Send</button>
+      </div>
+    </div>
+
+    <div class="quick-actions" id="quick-actions">
+      <!-- Quick action buttons will be injected by JS -->
+    </div>
+
+    <div class="system-info" id="system-info">
+      <h3>System</h3>
+      <ul>
+        <li><span class="key">Status</span><span class="value" id="system-status">Initializing...</span></li>
+        <li><span class="key">Model</span><span class="value" id="system-model">Loading...</span></li>
+        <li><span class="key">Latency</span><span class="value" id="system-latency">--</span>ms</li>
+      </ul>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+
+    const BACKEND_URL = 'http://127.0.0.1:5000';
+
+    // Initialize Socket.IO connection
+    const socket = io(BACKEND_URL, {
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000
+    });
+
+    const chatArea = document.getElementById('chat-area');
+    const commandInput = document.getElementById('command-input');
+    const sendBtn = document.getElementById('send-btn');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const systemStatus = document.getElementById('system-status');
+    const systemModel = document.getElementById('system-model');
+    const systemLatency = document.getElementById('system-latency');
+
+    // DOM elements
+    const quickActions = document.getElementById('quick-actions');
+
+    // State
+    let isListening = false;
+
+    // Render functions
+    function addMessage(text, isUser = false) {
+      const div = document.createElement('div');
+      div.className = `message ${isUser ? 'user' : 'assistant'}`;
+      
+      const avatarClass = isUser ? 'user' : 'assistant';
+      const avatarColor = isUser ? 'var(--accent)' : 'var(--card)';
+      
+      div.innerHTML = `
+        <div class="message-avatar ${avatarClass}" style="background: ${isUser ? 'var(--accent)' : 'var(--card)'}; color: ${avatarColor}">
+          ${isUser ? 'U' : 'B'}
+        </div>
+        <div class="message-bubble ${isUser ? 'user' : 'assistant'}">
+          ${escapeHtml(text)}
+        </div>
+        <div class="message-meta ${isUser ? 'user' : 'assistant'}">
+          ${isUser ? 'Just now' : formatTime()}
+        </div>
+      `;
+      
+      chatArea.appendChild(div);
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatTime() {
+      return new Date().toLocaleTimeString([], { minute: '2-digit', second: '2-digit' });
+    }
+
+    function updateStatus(connected) {
+      statusDot.style.background = connected ? 'var(--accent)' : 'var(--muted)';
+      statusText.textContent = connected ? 'Connected' : 'Disconnected';
+      statusDot.classList.toggle('recording', false);
+    }
+
+    function setListening(listening) {
+      statusDot.classList.toggle('recording', listening);
+      isListening = listening;
+    }
+
+    function updateSystemInfo(info) {
+      if (info.status) systemStatus.textContent = info.status;
+      if (info.model) systemModel.textContent = info.model;
+      if (info.latency !== undefined) systemLatency.textContent = info.latency;
+    }
+
+    // Event listeners
+    sendBtn.addEventListener('click', sendCommand);
+    
+    commandInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        sendCommand();
+      }
+    });
+
+    function sendCommand() {
+      const text = commandInput.value.trim();
+      if (!text) return;
+      
+      addMessage(text, true);
+      socket.emit('action', { text });
+      commandInput.value = '';
+    }
+
+    // Quick action buttons
+    function renderQuickActions(actions) {
+      quickActions.innerHTML = '';
+      actions.forEach(action => {
+        const btn = document.createElement('div');
+        btn.className = 'quick-action';
+        btn.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-currentColor>
+            ${action.svg}
+          </svg>
+          <span>${action.label}</span>
+        `;
+        btn.addEventListener('click', () => {
+          commandInput.value = action.command;
+          sendCommand();
+        });
+        quickActions.appendChild(btn);
+      });
+    }
+
+    // Initial quick actions
+    renderQuickActions([
+      { label: 'Open App', svg: '<path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M5 3v6h14V3H5"/>', command: 'open_app Safari' },
+      { label: 'Search Web', svg: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>', command: 'search_web best pasta recipe' },
+      { label: 'Set Volume', svg: '<polyline points="21 15 16 10 5 21"/>', command: 'set_volume 70' }
+    ]);
+
+    // Socket event listeners
+    socket.on('connect', () => {
+      updateStatus(true);
+    });
+
+    socket.on('disconnect', () => {
+      updateStatus(false);
+    });
+
+    socket.on('transcript', (data) => {
+      addMessage(data.text);
+    });
+
+    socket.on('response', (data) => {
+      addMessage(data.text);
+      updateSystemInfo({ latency: data.latency });
+    });
+
+    socket.on('system', (data) => {
+      // Show system messages
+      if (data.message) {
+        addMessage(data.text, false);
+      }
+    });
+
+    socket.on('error', (data) => {
+      console.error('Socket error:', data);
+    });
+  </script>
+
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+</body>
+</html>
