@@ -1,30 +1,45 @@
 """JARVIS — macOS AI Assistant Backend.
 
-Flask REST API backend with native macOS system integration.
-REST endpoint:  POST /api/command   {"command": "text"}
-Frontend uses native fetch() — no WebSockets.
+Ultra-modern Flask REST backend with a typo-tolerant natural-language
+intent engine and native macOS system integration.
 
-System access via subprocess (osascript / open / pmset / system_profiler / etc.)
-Voice output via pyttsx3 (local TTS). Microphone input is handled in the
-browser using the Web Speech API, so no backend speech_recognition is required.
+Endpoint:
+    POST /api/command   {"command": "text"}
+    -> {"status": "success", "message": "JARVIS response text"}
+
+Caching is fully disabled via after_request so the UI always reflects the
+latest template/markup during development.
 """
 
 import os
 import re
+import random
+import datetime
+import difflib
 import subprocess
 import webbrowser
-import datetime
-import random
-import socket
-import platform
 
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
 
+# Auto-reload templates from disk on every request during development.
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+
+
+@app.after_request
+def add_header(response):
+    """Kill all caching so browsers/Flask never serve stale files."""
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 # ---------------------------------------------------------------------------
-# Text-to-Speech Engine (local, no internet needed)
+# Text-to-Speech (local, optional) — pyttsx3
 # ---------------------------------------------------------------------------
+
 try:
     import pyttsx3
     _engine = pyttsx3.init()
@@ -39,7 +54,8 @@ try:
             pass
 except Exception:
     _engine = None
-    def speak(text):
+
+    def speak(text):  # no-op fallback
         pass
 
 
@@ -48,7 +64,7 @@ except Exception:
 # ---------------------------------------------------------------------------
 
 def _run(cmd):
-    """Run a shell-level command list and return stripped stdout or None."""
+    """Run a shell command list and return stripped stdout, or None."""
     try:
         return subprocess.run(cmd, capture_output=True, text=True, check=False).stdout.strip()
     except Exception:
@@ -60,228 +76,153 @@ def _osascript(script):
     return _run(["osascript", "-e", script])
 
 
+def _ratio(a, b):
+    """0..1 similarity between two strings."""
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+
+def _alias_hit(text, alias):
+    """True if alias (or a close typo of it) appears in the text."""
+    if not alias:
+        return False
+    if alias in text:
+        return True
+    # Only fuzzy-match reasonably long words to avoid false positives.
+    if len(alias) < 5:
+        return False
+    for token in re.findall(r"[a-zçğıöşü]+", text):
+        if _ratio(alias, token) >= 0.72:
+            return True
+    return False
+
+
+# ---------------------------------------------------------------------------
+# App & Intent Registry
+# ---------------------------------------------------------------------------
+
+OPEN_VERBS = ("open", "launch", "start", "play", "go to", "show me", "run")
+BLOCK_VERBS = ("close", "kill", "quit", "stop", "exit", "kapat")
+
+APP_REGISTRY = {
+    "youtube": {
+        "kind": "web",
+        "url": "https://www.youtube.com",
+        "aliases": ["youtube", "yutube", "you tube", "yt"],
+    },
+    "terminal": {
+        "kind": "app",
+        "app": "Terminal",
+        "aliases": ["terminal"],
+    },
+    "finder": {
+        "kind": "app",
+        "app": "Finder",
+        "aliases": ["finder"],
+    },
+    "spotify": {
+        "kind": "app",
+        "app": "Spotify",
+        "aliases": ["spotify", "spofity"],
+    },
+    "chrome": {
+        "kind": "app",
+        "app": "Google Chrome",
+        "aliases": ["chrome", "google chrome"],
+    },
+}
+
+
+def _detect_app(text):
+    """Return the app key whose alias (or typo) matches the text, else None."""
+    for key, spec in APP_REGISTRY.items():
+        if any(_alias_hit(text, a) for a in spec["aliases"]):
+            return key
+    return None
+
+
+def _open_app(key):
+    """Launch/open the requested app or website."""
+    spec = APP_REGISTRY[key]
+    if spec["kind"] == "web":
+        webbrowser.open(spec["url"])
+        reply = f"Opening {key.title()} in your browser, sir."
+    else:
+        _run(["open", "-a", spec["app"]])
+        reply = f"Launching {spec['app']}, sir."
+    speak(reply)
+    return reply
+
+
+# ---------------------------------------------------------------------------
+# System Handlers
+# ---------------------------------------------------------------------------
+
+def _system_report():
+    """Live CPU / RAM / battery telemetry."""
+    try:
+        import psutil
+    except Exception:
+        return "System telemetry is momentarily unavailable, sir."
+    cpu = psutil.cpu_percent(interval=0.5)
+    mem = psutil.virtual_memory()
+    reply = f"System Telemetry — CPU: {cpu}% | RAM: {mem.percent}% ({mem.used // (1024 ** 3)} GB used)"
+    battery = psutil.sensors_battery()
+    if battery is not None:
+        state = "charging" if battery.power_plugged else "on battery"
+        reply += f" | Battery: {battery.percent}% ({state})"
+    speak(reply)
+    return reply
+
+
 # ---------------------------------------------------------------------------
 # Conversational Knowledge Base
 # ---------------------------------------------------------------------------
 
-KNOWLEDGE_BASE = {
+CONVERSATIONAL = {
     "greetings": {
-        "patterns": ["hello", "hi", "hey", "good morning", "good afternoon", "good evening", "selam"],
+        "patterns": ["hello", "hi", "hey there", "good morning", "good afternoon", "good evening", "selam", "merhaba"],
         "responses": [
             "Hello Ozan. All systems are fully operational.",
-            "Online and ready for your commands, sir.",
-            "Hey! How can I assist you with your system today?"
-        ]
+            "At your service, sir. What shall we tackle today?",
+            "Good to see you. JARVIS online and ready.",
+        ],
     },
     "status": {
-        "patterns": ["how are you", "whats up", "how do you do", "status"],
+        "patterns": ["how are you", "how are you doing", "whats up", "status", "what's up"],
         "responses": [
             "Running at peak performance, sir.",
-            "All background services are healthy and responsive.",
-            "I'm operating efficiently. What are we building or running today?"
-        ]
+            "All systems are healthy and responsive.",
+            "Operating smoothly. What do you need?",
+        ],
     },
     "identity": {
-        "patterns": ["who are you", "what are you", "your name"],
+        "patterns": ["who are you", "what are you", "your name", "what's your name", "what is your name"],
         "responses": [
             "I am JARVIS, your personal macOS AI assistant.",
-            "I am JARVIS, designed to execute system controls and manage your workspace."
-        ]
+            "JARVIS at your service — built to command your workspace.",
+        ],
     },
     "thanks": {
-        "patterns": ["thanks", "thank you", "thankyou", "teşekkür"],
+        "patterns": ["thanks", "thank you", "thankyou", "ty", "teşekkür", "teşekkürler", "sağol", "sagol"],
         "responses": [
             "You're welcome, sir.",
             "Always at your service.",
-            "Anytime, Ozan!"
-        ]
+            "Anytime, Ozan.",
+        ],
     },
     "capabilities": {
-        "patterns": ["what can you do", "help", "commands", "abilities", "features"],
+        "patterns": ["what can you do", "help", "commands", "features", "abilities"],
         "responses": [
-            "I can open apps and websites, control system volume, take screenshots, report CPU/RAM/battery/network stats, show the time and date, send desktop notifications, and hold a conversation. Just tell me what you need, sir."
-        ]
-    }
+            "I can open apps and websites — try 'open terminal', 'open youtube' or 'open spotify' — control audio with 'mute' or 'unmute', report system telemetry with 'system check', and tell you the time or date. How can I assist, sir?",
+        ],
+    },
 }
 
-# Common macOS apps: "open app" style. Key is a trigger substring, value is the app name.
-APP_MAP = {
-    "safari": "Safari",
-    "chrome": "Google Chrome",
-    "firefox": "Firefox",
-    "terminal": "Terminal",
-    "finder": "Finder",
-    "music": "Music",
-    "itunes": "Music",
-    "spotify": "Spotify",
-    "notes": "Notes",
-    "calculator": "Calculator",
-    "calendar": "Calendar",
-    "mail": "Mail",
-    "messages": "Messages",
-    "facetime": "FaceTime",
-    "photos": "Photos",
-    "preview": "Preview",
-    "textedit": "TextEdit",
-    "sublime": "Sublime Text",
-    "code": "Visual Studio Code",
-    "vscode": "Visual Studio Code",
-    "pycharm": "PyCharm",
-}
-
-
-# ---------------------------------------------------------------------------
-# System Command Handlers
-# ---------------------------------------------------------------------------
-
-def _handle_system_command(clean_text, original_text):
-    """Return a response message for a matched system command, or None."""
-
-    # --- Open a website ---
-    url_match = re.search(r"open\s+(https?://\S+|www\.\S+)", clean_text)
-    if url_match:
-        url = url_match.group(1)
-        if not url.startswith("http"):
-            url = "https://" + url
-        webbrowser.open(url)
-        speak(f"Opening {url}, sir.")
-        return f"Opening {url} in your browser, sir."
-
-    known_sites = {
-        "youtube": "https://www.youtube.com",
-        "google": "https://www.google.com",
-        "github": "https://github.com",
-        "gmail": "https://mail.google.com",
-        "stack overflow": "https://stackoverflow.com",
-        "twitter": "https://twitter.com",
-        "x ": "https://x.com",
-    }
-    for site, url in known_sites.items():
-        if ("open " + site.strip()) in clean_text or (site.strip() + " sayfası") in clean_text:
-            webbrowser.open(url)
-            speak(f"Opening {site.strip()}, sir.")
-            return f"Opening {site.strip()} in your browser, sir."
-
-    # --- Open an installed app ---
-    for trigger, app_name in APP_MAP.items():
-        if f"open {trigger}" in clean_text or (trigger in clean_text and "open" in clean_text):
-            subprocess.run(["open", "-a", app_name])
-            speak(f"Launching {app_name}, sir.")
-            return f"Launching {app_name}, sir."
-
-    # --- Volume control ---
-    if "mute" in clean_text and "unmute" not in clean_text:
-        _run(["osascript", "-e", "set volume output muted true"])
-        speak("System audio muted, sir.")
-        return "System audio muted, sir."
-
-    if "unmute" in clean_text:
-        _run(["osascript", "-e", "set volume output muted false"])
-        speak("System audio unmuted, sir.")
-        return "System audio unmuted, sir."
-
-    vol_match = re.search(r"volume(?: to)?\s*(\d{1,3})", clean_text)
-    if vol_match:
-        level = max(0, min(100, int(vol_match.group(1))))
-        _run(["osascript", "-e", f"set volume output volume {level}"])
-        speak(f"Volume set to {level} percent, sir.")
-        return f"Volume set to {level} percent."
-
-    if "volume up" in clean_text or re.search(r"\b(stop|raise|art)(?:ır)?", clean_text):
-        _run(["osascript", "-e", "set volume output volume (output volume of (get volume settings) + 10)"])
-        speak("Turning the volume up, sir.")
-        return "Volume increased by 10 percent."
-
-    if "volume down" in clean_text or re.search(r"\b(azalt|kıs|düş)\b", clean_text):
-        _run(["osascript", "-e", "set volume output volume (output volume of (get volume settings) - 10)"])
-        speak("Turning the volume down, sir.")
-        return "Volume decreased by 10 percent."
-
-    # --- System telemetry ---
-    if any(k in clean_text for k in ["system check", "specs", "cpu", "ram", "telemetry"]):
-        import psutil
-        cpu = psutil.cpu_percent(interval=0.5)
-        ram = psutil.virtual_memory().percent
-        msg = f"System Telemetry — CPU: {cpu}% | RAM Usage: {ram}%"
-        speak(msg)
-        return msg
-
-    # --- Battery ---
-    if any(k in clean_text for k in ["battery", "batarya", "şarj", "charge"]):
-        out = _run(["pmset", "-g", "batt"])
-        pct = re.search(r"(\d+)%", out or "")
-        state = "charging" if "charging" in (out or "") else "on battery"
-        msg = f"Battery at {pct.group(1)}%" if pct else "Battery info unavailable."
-        speak(msg)
-        return f"Battery: {pct.group(1)}%, {state}." if pct else msg
-
-    # --- Network info ---
-    if any(k in clean_text for k in ["network", "ip address", "my ip", "ip adres"]):
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
-        except Exception:
-            ip = "unavailable"
-        speak(f"Your local IP address is {ip}, sir.")
-        return f"Your local IP address is {ip}."
-
-    # --- Screenshot ---
-    if "screenshot" in clean_text or "ekran görüntüsü" in clean_text or "screen shot" in clean_text:
-        desktop = os.path.expanduser("~/Desktop")
-        path = os.path.join(desktop, f"JARVIS_screenshot_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
-        _run(["screencapture", "-x", path])
-        speak(f"Screenshot saved to Desktop, sir.")
-        return f"Screenshot saved to {path}."
-
-    # --- Desktop notification ---
-    notif_match = re.search(r"notif(?:y|ication)?\s+(.+)$", clean_text)
-    if "notify" in clean_text or "notification" in clean_text or "bildir" in clean_text:
-        message = notif_match.group(1).strip() if notif_match else "Notification from JARVIS"
-        _osascript(f'display notification "{message}" with title "JARVIS"')
-        speak(f"Notification sent, sir.")
-        return f"Notification sent: {message}"
-
-    # --- Create a file / note ---
-    note_match = re.search(r"(?:create|make|write a)?\s*(?:note|file|not)\s+(.+)$", clean_text)
-    if ("create file" in clean_text or "make file" in clean_text or "write note" in clean_text or "create note" in clean_text) and note_match:
-        filename = f"JARVIS_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        path = os.path.join(os.path.expanduser("~/Desktop"), filename)
-        with open(path, "w") as f:
-            f.write(note_match.group(1).strip())
-        speak(f"Note saved to your Desktop, sir.")
-        return f"Note saved to {path}."
-
-    # --- Date ---
-    if any(k in clean_text for k in ["todays date", "what is the date", "today's date", "tarih", "date today"]):
-        today = datetime.datetime.now().strftime("%A, %B %d, %Y")
-        speak(f"Today is {today}, sir.")
-        return f"Today is {today}."
-
-    # --- Time ---
-    if any(k in clean_text for k in ["time", "saat", "clock"]):
-        now = datetime.datetime.now().strftime("%I:%M %p")
-        speak(f"The current time is {now}, sir.")
-        return f"The current local time is {now}."
-
-    # --- Sleep / shut down / restart ---
-    if any(k in clean_text for k in ["shut down", "shutdown", "turn off", "kapat"]):
-        _run(["osascript", "-e", 'tell application "System Events" to shut down'])
-        speak("Shutting down your computer.")
-        return "Shutting down the computer now."
-
-    if "restart" in clean_text or "reboot" in clean_text or "yeniden başlat" in clean_text:
-        _run(["osascript", "-e", 'tell application "System Events" to restart'])
-        speak("Restarting your computer.")
-        return "Restarting the computer now."
-
-    if "sleep" in clean_text or "uyku" in clean_text or "lock screen" in clean_text or "kilitle" in clean_text:
-        _run(["pmset", "sleepnow"])
-        speak("Putting the computer to sleep.")
-        return "Putting the computer to sleep."
-
-    return None
+FALLBACK_RESPONSES = [
+    "I'm not sure I caught that, sir. Try 'open terminal', 'system check', 'mute', or ask 'what can you do'.",
+    "That request is outside my current command set. I can open apps, control audio, and check system status.",
+    "Understood — though I don't have a handler for that yet. Try a system command like 'open spotify' or 'time'.",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -289,28 +230,56 @@ def _handle_system_command(clean_text, original_text):
 # ---------------------------------------------------------------------------
 
 def generate_smart_response(text):
-    """Generate a natural, varied response for conversational/command inputs."""
-    clean_text = text.lower().strip()
+    """Route user input through the typo-tolerant intent engine."""
+    clean = (text or "").lower().strip()
+    if not clean:
+        return "I didn't catch that, sir. How may I help you?"
 
-    # 1) System commands take priority
-    system_response = _handle_system_command(clean_text, text)
-    if system_response:
-        return system_response
+    # ── Open app / website (typo-tolerant) ──────────────────────────────
+    app_key = _detect_app(clean)
+    if app_key:
+        wants_open = any(v in clean for v in OPEN_VERBS)
+        is_blocked = any(v in clean for v in BLOCK_VERBS)
+        # Open when explicitly asked, or when the app name stands alone.
+        if wants_open or (not is_blocked and len(clean.split()) <= 2):
+            return _open_app(app_key)
 
-    # 2) Conversational intents
-    for intent, data in KNOWLEDGE_BASE.items():
-        if any(pattern in clean_text for pattern in data["patterns"]):
+    # ── Audio control (unmute must be checked before mute) ──────────────
+    if "unmute" in clean or "sesi aç" in clean or "sound on" in clean:
+        _osascript("set volume output muted false")
+        reply = "Audio unmuted, sir."
+        speak(reply)
+        return reply
+    if "mute" in clean or "sesi kapat" in clean or "sound off" in clean:
+        _osascript("set volume output muted true")
+        reply = "Audio muted, sir."
+        speak(reply)
+        return reply
+
+    # ── System telemetry ────────────────────────────────────────────────
+    if any(k in clean for k in ["system check", "check system", "telemetry", "specs",
+                                "cpu", "ram", "memory", "battery", "batarya"]):
+        return _system_report()
+
+    # ── Time & date ─────────────────────────────────────────────────────
+    if re.search(r"\b(time|saat|clock)\b", clean):
+        now = datetime.datetime.now().strftime("%I:%M %p")
+        reply = f"The local time is {now}, sir."
+        speak(reply)
+        return reply
+    if re.search(r"\b(date|tarih)\b", clean) or "today's date" in clean or "todays date" in clean:
+        today = datetime.datetime.now().strftime("%A, %B %d, %Y")
+        reply = f"Today is {today}, sir."
+        speak(reply)
+        return reply
+
+    # ── Conversational intents ──────────────────────────────────────────
+    for intent, data in CONVERSATIONAL.items():
+        if any(re.search(r"\b" + re.escape(p) + r"\b", clean) for p in data["patterns"]):
             return random.choice(data["responses"])
 
-    # 3) Generic / fallback responses
-    fallbacks = [
-        f"I've analyzed '{text}'. It isn't a recognized system command, but I'm logging it.",
-        "Understood. I can open apps and websites, control volume, take screenshots, ",
-        "show CPU/RAM/battery/network stats, send notifications, and more.",
-        f"I heard: '{text}'. Try asking me for 'system check', 'open terminal', ",
-        "or 'what can you do'.",
-    ]
-    return "".join(random.sample(fallbacks, 2))
+    # ── Polished fallback (never a raw echo) ────────────────────────────
+    return random.choice(FALLBACK_RESPONSES)
 
 
 # ---------------------------------------------------------------------------
@@ -324,9 +293,9 @@ def index():
 
 @app.route("/api/command", methods=["POST"])
 def handle_command():
-    """Accept JSON {"command": "text"} and return {"status": "success", "message": "response_text"}."""
-    data = request.get_json() or {}
-    raw_cmd = data.get("command", "").strip()
+    """Accept {"command": "text"} and return {"status": "success", "message": "..."}."""
+    data = request.get_json(silent=True) or {}
+    raw_cmd = (data.get("command") or "").strip()
 
     if not raw_cmd:
         return jsonify({"status": "error", "message": "Empty command"}), 400
