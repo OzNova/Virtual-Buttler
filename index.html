@@ -888,6 +888,27 @@ const BACKEND_URL = 'http://127.0.0.1:5000';
     document.head.appendChild(style);
   </script>
 
-  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<script>
+  const socket = io('http://127.0.0.1:5000', { transports: ['websocket', 'polling'] });
+  
+  socket.on('connect', () => {
+    console.log('Connected to backend!');
+    const badge = document.querySelector('.status-badge');
+    if (badge) {
+      badge.textContent = 'CONNECTED';
+      badge.className = 'status-badge connected';
+    }
+  });
+
+  socket.on('disconnect', () => {
+    const badge = document.querySelector('.status-badge');
+    if (badge) {
+      badge.textContent = 'DISCONNECTED';
+      badge.className = 'status-badge disconnected';
+    }
+  });
+</script>
 </body>
 </html>
