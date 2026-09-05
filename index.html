@@ -247,10 +247,33 @@
     }
 
     /* ---------- command_result ---------- */
-    socket.on("command_result", (data) => {
-      const msg = data.message || "Command processed";
-      addMessage(msg, true); /* User side */
+    socket.on('command_result', (data) => {
+      if (data && data.message) {
+        addMessage(data.message, false);
+      }
     });
+
+    /* ---------- addMessage ---------- */
+    function addMessage(text, isUser) {
+      const container = document.getElementById('chat-messages') || document.querySelector('.conversation-container') || document.querySelector('.chat-box');
+      if (!container) return;
+      
+      const msgDiv = document.createElement('div');
+      msgDiv.className = isUser ? 'user-message' : 'assistant-message';
+      msgDiv.textContent = text;
+      container.appendChild(msgDiv);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    /* ---------- sendMessage ---------- */
+    function sendMessage() {
+      const input = document.getElementById('command-input') || document.querySelector('input');
+      if (!input || !input.value.trim()) return;
+      const text = input.value.trim();
+      addMessage(text, true);
+      socket.emit('send_command', { command: text });
+      input.value = '';
+    }
 
     /* ---------- system_check_response ---------- */
     socket.on("system_check_response", (data) => {
