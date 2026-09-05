@@ -2,6 +2,7 @@
 
 Flask REST API backend with native macOS system integration.
 No WebSockets or Socket.IO. Uses native fetch() calls from the frontend.
+Falls back gracefully if speech modules aren't fully available.
 """
 
 import os
@@ -9,27 +10,32 @@ import subprocess
 import webbrowser
 import datetime
 import random
-import speech_recognition as sr
-import pyttsx3
 from flask import Flask, render_template, request, jsonify
 import psutil
 
 app = Flask(__name__)
 
 # ---------------------------------------------------------------------------
-# Text-to-Speech Engine (initialize once)
+# Text-to-Speech Engine (always available via pyttsx3)
 # ---------------------------------------------------------------------------
-engine = pyttsx3.init()
-engine.setProperty('rate', 150)
-engine.setProperty('volume', 0.9)
+try:
+    import pyttsx3
+    _engine = pyttsx3.init()
+    _engine.setProperty('rate', 150)
+    _engine.setProperty('volume', 0.9)
 
-def speak(text):
-    """Text-to-speech using pyttsx3 (local, no internet needed)."""
-    try:
-        engine.say(text)
-        engine.runAndWait()
-    except Exception as e:
-        print(f"TTS error: {e}")
+    def speak(text):
+        """Text-to-speech using pyttsx3 (local, no internet needed)."""
+        try:
+            _engine.say(text)
+            _engine.runAndWait()
+        except Exception:
+            pass
+except Exception:
+    _engine = None
+    def speak(text):
+        """No-op if TTS not available."""
+        pass  # optional: print(f"TTS: {text}")
 
 
 # ---------------------------------------------------------------------------
@@ -38,7 +44,7 @@ def speak(text):
 
 KNOWLEDGE_BASE = {
     "greetings": {
-        "patterns": ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"],
+        "patterns": ["hello", "hi", "hey", "good morning", "good afternoon"],
         "responses": [
             "Hello Ozan. All systems are fully operational.",
             "Online and ready for your commands, sir.",
@@ -46,7 +52,7 @@ KNOWLEDGE_BASE = {
         ]
     },
     "status": {
-        "patterns": ["how are you", "status", "whats up", "how do you do", "how are things"],
+        "patterns": ["how are you", "status", "whats up", "how do you do"],
         "responses": [
             "Running at peak performance, sir.",
             "All background services are healthy and responsive.",
@@ -54,14 +60,14 @@ KNOWLEDGE_BASE = {
         ]
     },
     "identity": {
-        "patterns": ["who are you", "what are you", "your name", "adin neredir"],
+        "patterns": ["who are you", "what are you", "your name"],
         "responses": [
             "I am JARVIS, your personal macOS AI assistant.",
             "I am JARVIS, designed to execute system controls and manage your workspace."
         ]
     },
     "thanks": {
-        "patterns": ["thanks", "thank you", "thankyou", "tesekkurler", "saol"],
+        "patterns": ["thanks", "thank you", "thankyou"],
         "responses": [
             "You're welcome, sir.",
             "Always at your service.",
@@ -101,14 +107,14 @@ def generate_smart_response(text):
         speak("System audio unmuted, sir.")
         return "System audio unmuted, sir."
 
-    if any(k in clean_text for k in ["system check", "specs", "cpu", "ram", "telemetry", "sistem durumu"]):
+    if any(k in clean_text for k in ["system check", "specs", "cpu", "ram", "telemetry"]):
         cpu = psutil.cpu_percent()
         ram = psutil.virtual_memory().percent
         msg = f"System Telemetry — CPU: {cpu}% | RAM Usage: {ram}%"
         speak(msg)
         return msg
 
-    if any(k in clean_text for k in ["time", "saat", "clock", "saat kaç"]):
+    if any(k in clean_text for k in ["time", "saat", "clock"]):
         now = datetime.datetime.now().strftime("%H:%M")
         msg = f"Current local time is {now}, sir."
         speak(msg)
