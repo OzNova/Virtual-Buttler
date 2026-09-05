@@ -558,8 +558,6 @@
       </div>
       <div class="info">
         <div class="status-badge disconnected" id="status-badge">Disconnected</div>
-        <div class="status-dot" id="status-dot"></div>
-        <div class="status-text" id="status-text">Disconnected</div>
       </div>
     </header>
 
@@ -627,8 +625,6 @@
     const commandInput = document.getElementById('command-input');
     const sendBtn = document.getElementById('send-btn');
     const statusBadge = document.getElementById('status-badge');
-    const statusDot = document.getElementById('status-dot');
-    const statusText = document.getElementById('status-text');
     const systemStatus = document.getElementById('system-status');
     const systemModel = document.getElementById('system-model');
     const systemLatency = document.getElementById('system-latency');
@@ -675,9 +671,7 @@
       
       const statusClass = connected ? 'connected' : 'disconnected';
       statusBadge.className = `status-badge ${statusClass}`;
-      statusText.textContent = connected ? 'Connected' : 'Disconnected';
-      statusDot.className = `status-dot ${statusClass}`;
-      statusDot.classList.toggle('recording', false);
+      statusBadge.textContent = connected ? 'Connected' : 'Disconnected';
       
       // Save state to localStorage
       try {
