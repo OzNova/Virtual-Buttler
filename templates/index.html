@@ -17,6 +17,7 @@
       --border: rgba(0, 255, 204, 0.1);
       --glass: rgba(8, 8, 12, 0.7);
       --glow-connected: rgba(0, 255, 204, 0.3);
+      --glow-disconnected: rgba(255, 55, 55, 0.3);
     }
 
     * {
@@ -156,8 +157,12 @@
     <button class="btn" onclick="sendMsg()">Send</button>
   </div>
 
-  <!-- Socket.IO is NOT included — using native fetch() -->
+  <!-- Web Speech API for voice input -->
   <script>
+    /* ---------- Check if Web Speech API is supported ---------- */
+    const supportsSpeech = !!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
+
+    /* ---------- Socket.IO is NOT used — native fetch() ---------- */
     /* ---------- DOM Elements ---------- */
     const chatContainer = document.getElementById("chat-container");
     const cmdInput = document.getElementById("cmd-input");
@@ -165,6 +170,57 @@
 
     /* ---------- State ---------- */
     let isConnected = true; /* Assume connected since the app starts up */
+    let recognition = null;
+
+    /* ---------- On DOM Content Loaded ---------- */
+    document.addEventListener("DOMContentLoaded", () => {
+      /* ---------- Initialize Voice Recognition ---------- */
+      if (supportsSpeech) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = "en-US";
+
+        /* ---------- On Speech Result ---------- */
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript.trim();
+          cmdInput.value = transcript;
+          /* Auto-submit when speech finishes */
+          if (!e.key || e.key !== " ") {
+            sendMsg();
+          }
+        };
+
+        /* ---------- On Speech Error ---------- */
+        recognition.onerror = (event) => {
+          console.error("Speech recognition error:", event.error);
+        };
+      }
+
+      /* ---------- Click Microphone Button (if recognition available) ---------- */
+      const micBtn = document.createElement("button");
+      micBtn.style.display = "none"; /* Hidden - use the input bar button instead */
+      micBtn.innerHTML = "<svg width='20' height='20' fill='currentColor' viewBox='0 0 24 24'><path d='M12 3v11M8 15l4-3 4 3V3'/></svg>";
+      micBtn.title = "Click to speak";
+      document.querySelector(".actions-dock").appendChild(micBtn);
+
+      /* ---------- Click to Toggle Voice Listening ---------- */
+      let isListening = false;
+      micBtn.addEventListener("click", () => {
+        isListening = !isListening;
+        if (isListening) {
+          recognition.start();
+          micBtn.innerHTML = "<svg width='20' height='20' fill='red' viewBox='0 0 24 24'><path d='M12 3v11M8 15l4-3 4 3V3'/></svg>";
+        } else {
+          recognition.stop();
+          micBtn.innerHTML = "<svg width='20' height='20' fill='currentColor' viewBox='0 0 24 24'><path d='M12 3v11M8 15l4-3 4 3V3'/></svg>";
+        }
+      });
+    });
+
+    /* ---------- DOM Elements ---------- */
+    const microphoneBtn = document.querySelector(".actions-dock button"); /* fallback */
 
     /* ---------- appendMessage ---------- */
     function appendMessage(text, isUser) {
@@ -199,6 +255,8 @@
         .then(data => {
           if (data.status === "success") {
             appendMessage(data.message, false);
+          } else {
+            appendMessage("Error: " + (data.message || "Unknown error"), false);
           }
         })
         .catch(err => {
@@ -229,13 +287,22 @@
     cmdInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { sendMsg(); }
     });
-
-    /* ---------- Initial health check (optional) ---------- */
-    /* fetch("/api/command", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command: "system check" })
-    }); */
+    /* Also allow Space bar to start/stop voice listening if recognition available */
+    if (supportsSpeech) {
+      cmdInput.addEventListener("keydown", (e) => {
+        if (e.key === " " && recognition) {
+          e.preventDefault();
+          isListening = !isListening;
+          if (isListening) {
+            recognition.start();
+            microphoneBtn.innerHTML = "<svg width='20' height='20' fill='red' viewBox='0 0 24 24'><path d='M12 3v11M8 15l4-3 4 3V3'/></svg>";
+          } else {
+            recognition.stop();
+            microphoneBtn.innerHTML = "<svg width='20' height='20' fill='currentColor' viewBox='0 0 24 24'><path d='M12 3v11M8 15l4-3 4 3V3'/></svg>";
+          }
+        }
+      });
+    }
   </script>
 </body>
 </html>
