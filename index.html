@@ -3,24 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Virtual Butler — macOS AI Assistant</title>
+  <title>JARVIS SYSTEM</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    /* ---------- Design System: Clean macOS Dark Mode ---------- */
+    /* ---------- Design System: Modern Dark / Glassmorphism ---------- */
     :root {
-      --bg: #0a0a12;
-      --bg-secondary: #12121c;
-      --bg-tertiary: #1a1a24;
-      --fg: #eaeaea;
-      --muted: #71717a;
-      --accent: #00ffcc;
-      --card: #1e1e2f;
-      --border: rgba(0, 255, 204, 0.1);
-      --success: #00ffcc;
-      --warning: #f5a623;
-      --error: #ff5f57;
+      --bg: #0b0c10;
+      --bg-secondary: #12131a;
+      --bg-tertiary: #1a1c24;
+      --fg: #e8eaed;
+      --muted: #5a5c67;
+      --accent: #66fcf1;
+      --accent-dim: rgba(102, 252, 241, 0.08);
+      --card: #161a22;
+      --border: rgba(102, 252, 241, 0.12);
+      --glow-connected: rgba(102, 252, 241, 0.4);
+      --glow-disconnected: rgba(255, 55, 55, 0.3);
+      --error: #ff3e3e;
+      --success: #66fcf1;
     }
 
     * {
@@ -31,7 +33,7 @@
 
     body {
       min-height: 100%;
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
       background: var(--bg);
       color: var(--fg);
       line-height: 1.5;
@@ -41,155 +43,138 @@
 
     .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
 
-    /* ---------- Main Layout: Flexbox ---------- */
-    .main {
-      max-width: 1400px; margin: 0 auto; padding: 24px;
-      display: flex; flex-direction: column; gap: 24px; height: 100vh;
-      overflow-y: auto;
+    /* ---------- Page Background & Glass Panel ---------- */
+    .page-bg {
+      position: fixed; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 100% 60% at 20% 20%, rgba(102, 252, 241, 0.05), transparent 50%),
+        radial-gradient(ellipse 80% 50% at 80% 80%, rgba(189, 19, 254, 0.04), transparent 50%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-secondary) 100%);
+      z-index: -1;
     }
 
-    /* ---------- Top Bar: Status + CPU/RAM ---------- */
+    .glass-panel {
+      position: relative; z-index: 1;
+      max-width: 900px; margin: 0 auto; padding: 32px 24px;
+      height: 90vh; backdrop-filter: blur(20px); border-radius: 24px;
+      border: 1px solid var(--border); background: var(--card);
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+
+    /* ---------- Header ---------- */
     .header {
       display: flex; justify-content: space-between; align-items: center; padding: 12px 20px;
-      background: var(--bg-secondary); border-radius: 16px; border: 1px solid var(--border);
+      background: var(--bg-secondary); border-radius: 16px 16px 0 0; border-bottom: 1px solid var(--border);
     }
 
-    .status-bar { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
-
-    .status-badge {
-      display: inline-flex; padding: 6px 12px; border-radius: 20px; font-size: 11px;
-      font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.2s;
+    .header-title { font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 600; letter-spacing: -0.5px; }
+    .badge {
+      padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5em;
+      transition: all 0.25s; border: 1px solid var(--border);
     }
-    .status-badge.connected { background: rgba(0, 255, 204, 0.12); color: var(--accent); border-color: var(--accent); }
-    .status-badge.disconnected { background: rgba(255, 95, 87, 0.12); color: var(--error); border-color: var(--error); }
-
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; animation: pulse-soft 2s ease-in-out infinite; }
-    .status-dot.connected { background: var(--accent); box-shadow: 0 0 16px rgba(0, 255, 204, 0.4); }
-    .status-dot.disconnected { background: var(--error); box-shadow: 0 0 16px rgba(255, 95, 87, 0.4); }
-
-    .status-text { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
-
-    .cpu-ram { display: flex; gap: 16px; align-items: center; font-family: var(--mono); font-size: 12px; }
-    .cpu-ram .label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .cpu-ram .value { color: var(--accent); min-width: 32px; }
-
-    /* ---------- Chat Container (Flexbox, NO inline-block/fit-content) ---------- */
-    .chat-container {
-      flex: 1; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; padding: 12px;
-      background: var(--bg-secondary); border-radius: 16px; border: 1px solid var(--border);
+    .badge.connected {
+      background: rgba(102, 252, 241, 0.12); color: var(--accent);
+      border-color: var(--accent); box-shadow: 0 0 20px var(--glow-connected);
+    }
+    .badge.disconnected {
+      background: rgba(255, 55, 55, 0.12); color: var(--error);
+      border-color: var(--error); box-shadow: 0 0 20px var(--glow-disconnected);
     }
 
-    .message {
-      display: flex; gap: 10px; align-items: flex-start; font-size: 14px;
-      word-break: break-word; line-height: 1.4;
-    }
-    .message.user { align-self: flex-end; }
-    .message.assistant { align-self: flex-start; }
+    /* ---------- Chat Container ---------- */
+    .chat-container { flex: 1; overflow-y: auto; padding: 24px 20px 20px; }
 
-    .message-avatar {
+    .msg {
+      display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; font-size: 14px; word-break: break-word;
+    }
+    .msg.user { justify-content: flex-end; }
+    .msg.assistant { justify-content: flex-start; }
+
+    .msg-avatar {
       width: 30px; height: 30px; border-radius: 12px; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;
     }
-    .message-avatar.user { background: var(--accent); color: var(--bg); }
-    .message-avatar.assistant { background: var(--card); color: var(--muted); }
+    .msg-avatar.user { background: var(--accent); color: var(--bg); }
+    .msg-avatar.assistant { background: var(--card); color: var(--muted); }
 
-    .message-bubble {
-      max-width: 70%; padding: 10px 16px; border-radius: 16px 16px 2px 16px;
-      font-size: 14px; word-break: break-word; font-weight: 500;
+    .msg-bubble {
+      max-width: 75%; padding: 12px 16px; border-radius: 18px 12px 12px 18px;
+      font-size: 13px; line-height: 1.4; word-break: break-word; font-weight: 500;
     }
-    .message-bubble.user { background: var(--accent); color: var(--bg); }
-    .message-bubble.assistant { background: rgba(255, 255, 255, 0.05); color: var(--fg); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px 16px 16px 2px; }
+    .msg-bubble.user { background: var(--accent); color: var(--bg); margin-left: auto; }
+    .msg-bubble.assistant { background: rgba(255, 255, 255, 0.04); color: var(--fg); border: 1px solid var(--border); border-radius: 12px 18px 18px 12px; }
 
-    .message-meta { font-size: 10px; color: var(--muted); margin-top: 4px; }
+    .msg-meta { font-size: 10px; color: var(--muted); margin-top: 4px; }
 
-    /* ---------- Quick Action Sidebar ---------- */
-    .sidebar {
-      flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; align-self: stretch;
-      background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px;
+    /* ---------- Quick Actions Dock ---------- */
+    .actions-dock {
+      padding: 20px 24px; background: var(--bg-secondary); border-radius: 0 0 24px 24px; border-top: 1px solid var(--border);
     }
-    .sidebar .title { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
-    .sidebar .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px; }
-    .action-btn {
-      padding: 10px 12px; border: none; border-radius: 14px; cursor: pointer;
+    .actions-dock .title { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 12px; }
+    .actions-dock .btn {
+      padding: 8px 14px; border: none; border-radius: 10px; cursor: pointer;
       font-family: inherit; font-size: 12px; font-weight: 500; transition: background 0.15s;
       background: var(--bg-tertiary); color: var(--fg);
     }
-    .action-btn:hover { background: var(--accent); color: var(--bg); }
-    .action-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .actions-dock .btn:hover { background: var(--accent); color: var(--bg); }
+    .actions-dock .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
     /* ---------- Input Bar ---------- */
-    .input-bar { flex-shrink: 0; display: flex; gap: 12px; align-items: center; padding: 12px 20px;
-      background: var(--bg-secondary); border-radius: 20px; border: 1px solid var(--border); }
-    .input-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 24px rgba(0, 255, 204, 0.2); }
-    .input-field { flex: 1; padding: 10px 14px; background: var(--bg-tertiary); border: none; border-radius: 14px;
-      color: var(--fg); font-size: 14px; font-family: var(--mono); resize: none; outline: none; }
-    .input-field:focus { background: var(--bg-tertiary); }
-    .input-field::placeholder { color: var(--muted); }
-    .send-btn { padding: 0 20px; background: var(--accent); color: var(--bg); border: none; border-radius: 14px;
-      font-weight: 600; font-size: 13px; cursor: pointer; min-width: 72px; transition: background 0.15s; }
-    .send-btn:hover { background: #00e5bb; }
-    .send-btn:focus-visible { outline: 2px solid var(--bg); outline-offset: 2px; }
+    .input-bar { padding: 16px 20px; background: var(--bg-secondary); border-radius: 20px; border: 1px solid var(--border); }
+    .input-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 24px var(--glow-connected); }
+    .input-bar input { flex: 1; padding: 10px 14px; background: var(--bg-tertiary); border: none; border-radius: 14px; color: var(--fg); font-size: 13px; font-family: var(--mono); resize: none; outline: none; }
+    .input-bar input:focus { background: var(--bg-tertiary); }
+    .input-bar input::placeholder { color: var(--muted); }
+    .input-bar .btn { padding: 0 20px; background: var(--accent); color: var(--bg); border: none; border-radius: 14px; font-weight: 600; font-size: 13px; cursor: pointer; min-width: 72px; }
 
     @media (max-width: 600px) {
-      .main { padding: 16px; gap: 16px; }
-      .header { padding: 10px 16px; }
-      .sidebar { padding: 12px; }
-      .input-bar { padding: 10px 16px; }
-      .input-field { font-size: 13px; }
-      .send-btn { min-width: 56px; font-size: 12px; }
+      .glass-panel { padding: 16px; height: auto; }
+      .header { padding: 10px 16px; border-radius: 12px 12px 0 0; }
+      .actions-dock { padding: 12px 16px; border-radius: 0 0 16px 16px; }
+      .actions-dock .btn { padding: 6px 10px; font-size: 11px; }
+      .input-bar { padding: 10px 12px; }
+      .input-bar input { font-size: 12px; }
+      .input-bar .btn { min-width: 50px; font-size: 11px; }
     }
   </style>
 </head>
 <body>
-  <div style="position:fixed;inset:0;pointer-events:none;background:
-    radial-gradient(ellipse 100% 60% at 20% 20%, rgba(0,255,204,0.06), transparent 50%),
-    radial-gradient(ellipse 80% 50% at 80% 80%, rgba(189,19,254,0.05), transparent 50%),
-    linear-gradient(180deg, var(--bg) 0%, var(--bg-secondary) 100%); z-index:-1;"></div>
+  <div class="page-bg"></div>
 
-  <div class="main">
-    <!-- ========= TOP BAR ========= -->
+  <div class="glass-panel">
+    <!-- ========= HEADER ========= -->
     <header class="header">
-      <div class="status-bar">
-        <div class="status-badge disconnected" id="status-badge">DISCONNECTED</div>
-        <div class="status-dot disconnected" id="status-dot"></div>
-        <span class="status-text">Disconnected</span>
-        <div class="cpu-ram" id="cpu-ram">
-          <span class="label">CPU</span><span class="value" id="cpu-val">--</span>%
-          <span class="label">RAM</span><span class="value" id="mem-val">--</span>%
-        </div>
-      </div>
+      <span class="header-title">JARVIS SYSTEM</span>
+      <span class="badge disconnected" id="status-badge">DISCONNECTED</span>
     </header>
 
     <!-- ========= CHAT CONTAINER ========= -->
-    <div class="chat-container" id="chat-container">
+    <div class="chat-container" id="chat-messages">
       <!-- Messages injected by JS -->
     </div>
 
-    <!-- ========= SIDEBAR: Quick Actions ========= -->
-    <div class="sidebar">
-      <div class="title">Quick Actions</div>
-      <div class="actions">
-        <button class="action-btn" onclick="sendCmd('open youtube')">YouTube</button>
-        <button class="action-btn" onclick="sendCmd('open terminal')">Terminal</button>
-        <button class="action-btn" onclick="sendCmd('open finder')">Finder</button>
-        <button class="action-btn" onclick="sendCmd('mute')">Mute</button>
-        <button class="action-btn" onclick="sendCmd('unmute')">Unmute</button>
-        <button class="action-btn" onclick="sendCmd('system check')">System Check</button>
-      </div>
+    <!-- ========= QUICK ACTIONS DOCK ========= -->
+    <div class="actions-dock">
+      <span class="title">Quick Actions</span>
+      <div class="btn" onclick="sendQuickCommand('open youtube')">YouTube</div>
+      <div class="btn" onclick="sendQuickCommand('open terminal')">Terminal</div>
+      <div class="btn" onclick="sendQuickCommand('open finder')">Finder</div>
+      <div class="btn" onclick="sendQuickCommand('mute')">Mute</div>
+      <div class="btn" onclick="sendQuickCommand('unmute')">Unmute</div>
+      <div class="btn" onclick="sendQuickCommand('system check')">System Check</div>
     </div>
   </div>
 
-    <!-- ========= INPUT BAR ========= -->
-    <div class="input-bar">
-      <input class="input-field" id="command-input" placeholder="Type a command…" autocomplete="off">
-      <button class="send-btn" id="send-btn">Send</button>
-    </div>
+  <!-- Input Bar (fixed position at bottom) -->
+  <div class="input-bar" id="input-bar">
+    <input id="cmd-input" type="text" placeholder="Type a command…" autocomplete="off">
+    <button class="btn" onclick="sendMsg()">Send</button>
   </div>
 
-  <!-- Socket.IO client -->
+  <!-- Socket.IO CDN -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
-    /* ---------- Socket.IO ---------- */
+    /* ---------- Socket.IO Connection ---------- */
     const socket = io("http://127.0.0.1:5000", {
       transports: ["websocket", "polling"],
       reconnectionAttempts: 5,
@@ -198,11 +183,8 @@
 
     /* ---------- DOM Elements ---------- */
     const statusBadge = document.getElementById("status-badge");
-    const cpuVal = document.getElementById("cpu-val");
-    const memVal = document.getElementById("mem-val");
-    const chatContainer = document.getElementById("chat-container");
-    const cmdInput = document.getElementById("command-input");
-    const sendBtn = document.getElementById("send-btn");
+    const chatMessages = document.getElementById("chat-messages");
+    const cmdInput = document.getElementById("cmd-input");
 
     /* ---------- State ---------- */
     let isConnected = false;
@@ -210,95 +192,64 @@
     /* ---------- On Connect ---------- */
     socket.on("connect", () => {
       isConnected = true;
-      statusBadge.className = "status-badge connected";
+      statusBadge.className = "badge connected";
       statusBadge.textContent = "CONNECTED";
-      statusDot.className = "status-dot connected";
-      statusText.textContent = "Connected";
     });
 
     /* ---------- On Disconnect ---------- */
     socket.on("disconnect", () => {
       isConnected = false;
-      statusBadge.className = "status-badge disconnected";
+      statusBadge.className = "badge disconnected";
       statusBadge.textContent = "DISCONNECTED";
-      statusDot.className = "status-dot disconnected";
-      statusText.textContent = "DISCONNECTED";
     });
 
-    /* ---------- Render Message ---------- */
-    function addMessage(text, isUser) {
-      const div = document.createElement("div");
-      div.className = `message ${isUser ? "user" : "assistant"}`;
+    /* ---------- appendMessage ---------- */
+    function appendMessage(text, isUser) {
+      const msgDiv = document.createElement("div");
+      msgDiv.className = `msg ${isUser ? "user" : "assistant"}`;
+
+      const avatar = document.createElement("div");
+      avatar.className = `msg-avatar ${isUser ? "user" : "assistant"}`;
+      avatar.textContent = isUser ? "U" : "B";
 
       const bubble = document.createElement("div");
-      bubble.className = `message-bubble ${isUser ? "user" : "assistant"}`;
+      bubble.className = `msg-bubble ${isUser ? "user" : "assistant"}`;
       bubble.textContent = text;
 
-      div.appendChild(bubble);
-
-      /* Avatar */
-      const avatar = document.createElement("div");
-      avatar.className = `message-avatar ${isUser ? "user" : "assistant"}`;
-      avatar.textContent = isUser ? "U" : "B";
-      div.insertBefore(avatar, bubble);
-
-      chatContainer.appendChild(div);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
+      msgDiv.appendChild(avatar);
+      msgDiv.appendChild(bubble);
+      chatMessages.appendChild(msgDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
     /* ---------- command_result ---------- */
-    socket.on('command_result', (data) => {
+    socket.on("command_result", (data) => {
       if (data && data.message) {
-        addMessage(data.message, false);
+        appendMessage(data.message, false);
       }
     });
 
-    /* ---------- addMessage ---------- */
-    function addMessage(text, isUser) {
-      const container = document.getElementById('chat-messages') || document.querySelector('.conversation-container') || document.querySelector('.chat-box');
-      if (!container) return;
-      
-      const msgDiv = document.createElement('div');
-      msgDiv.className = isUser ? 'user-message' : 'assistant-message';
-      msgDiv.textContent = text;
-      container.appendChild(msgDiv);
-      container.scrollTop = container.scrollHeight;
-    }
-
-    /* ---------- sendMessage ---------- */
-    function sendMessage() {
-      const input = document.getElementById('command-input') || document.querySelector('input');
+    /* ---------- sendMsg ---------- */
+    function sendMsg() {
+      const input = document.getElementById("cmd-input");
       if (!input || !input.value.trim()) return;
       const text = input.value.trim();
-      addMessage(text, true);
-      socket.emit('send_command', { command: text });
-      input.value = '';
+      appendMessage(text, true);
+      socket.emit("send_command", { command: text });
+      input.value = "";
     }
 
-    /* ---------- system_check_response ---------- */
-    socket.on("system_check_response", (data) => {
-      if (cpuVal !== undefined) cpuVal.textContent = data.cpu || "--";
-      if (memVal !== undefined) memVal.textContent = data.memory || "--";
-    });
-
-    /* ---------- Send Command (Enter or Button) ---------- */
-    function sendCmd(text) {
-      const trimmed = (text || "").trim();
+    /* ---------- sendQuickCommand ---------- */
+    function sendQuickCommand(cmdText) {
+      const trimmed = (cmdText || "").trim();
       if (!trimmed) return;
-
-      /* Append immediately to UI */
-      addMessage(trimmed, true);
-
-      /* Emit to backend */
+      appendMessage(trimmed, true);
       socket.emit("send_command", { command: trimmed });
-
-      /* Clear input */
-      cmdInput.value = "";
     }
 
-    /* ---------- Enter Key ---------- */
+    /* ---------- Enter Key Listener ---------- */
     cmdInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { sendCmd(cmdInput.value); }
+      if (e.key === "Enter") { sendMsg(); }
     });
 
     /* ---------- Initial health fetch ---------- */

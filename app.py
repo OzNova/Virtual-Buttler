@@ -1,39 +1,24 @@
-"""Virtual Butler — macOS AI Assistant Backend.
+"""JARVIS — macOS AI Assistant Backend.
 
-Flask + SocketIO server with clean, robust system integration.
+Flask-SocketIO server with clean, robust system integration.
 """
 
 import os
-import sys
-import json
-import time
-import logging
-import webbrowser
 import subprocess
+import webbrowser
 import psutil
 
-from flask import Flask, send_from_directory, jsonify, request
+from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 
 # ---------------------------------------------------------------------------
 # Flask + SocketIO Setup
 # ---------------------------------------------------------------------------
 
-app = Flask(__name__, static_folder=".")
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "virtual-butler-secret")
+app = Flask(__name__)
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "jarvis-secret")
 
-# Disable Flask-SocketIO logger spam in production
-socketio_logger = os.getenv("SOCKETIO_LOGGER", "0")
-if socketio_logger.strip() not in ("1", "true", "True"):
-    import logging as _logging
-    _logging.getLogger("socketio").setLevel(_logging.WARNING)
-    _logging.getLogger("engineio").setLevel(_logging.WARNING)
-
-socketio = SocketIO(app, cors_allowed_origins=["http://127.0.0.1:5000"])
-
-# Push app context so background tasks work without errors
-ctx = app.app_context()
-ctx.push()
+socketio = SocketIO(app, cors_allowed_origins="http://127.0.0.1:5000")
 
 
 # ---------------------------------------------------------------------------
@@ -59,9 +44,10 @@ def set_volume_muted(muted: bool) -> str:
     try:
         subprocess.run(
             ["osascript", "-e", f"set volume output muted {state}"],
-            check=True, capture_output=True,
+            check=True,
+            capture_output=True,
         )
-        return "Audio muted." if muted else "Audio unmuted."
+        return "System audio muted." if muted else "System audio unmuted."
     except Exception as e:
         return f"Volume toggle failed: {e}"
 
@@ -87,93 +73,62 @@ def get_system_info():
 
 @socketio.on("connect")
 def handle_connect():
-    print("[BACKEND] Client connected.", flush=True)
-    emit("status_update", {"state": "CONNECTED", "cpu": 0, "memory": 0, "model": "big-pickle"})
+    print("[BACKEND] Client connected")
+    emit("status_update", {"status": "connected"})
 
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    print("[BACKEND] Client disconnected.", flush=True)
-
-
-@socketio.on("voice_start")
-def handle_voice_start():
-    emit("system_event", {"message": "Listening…"})
-
-
-@socketio.on("voice_stop")
-def handle_voice_stop():
-    emit("system_event", {"message": "Processing…"})
+    print("[BACKEND] Client disconnected")
 
 
 @socketio.on("send_command")
 def handle_send_command(data):
     """Parse and route incoming commands. Always emit command_result."""
-    cmd = data.get("command", "").strip().lower() if data else ""
-    print(f"[RECV COMMAND]: {data}", flush=True)
+    raw_cmd = data.get("command", "").strip() if data else ""
+    cmd = raw_cmd.lower()
 
-    if not cmd:
-        emit("command_result", {"status": "info", "message": "No command received."})
-        return
+    response = ""
 
     # ── Open YouTube ───────────────────────────────────────────────────────
     if "open youtube" in cmd:
-        webbrowser.open("https://youtube.com")
-        msg = "Opening YouTube..."
-        emit("command_result", {"status": "success", "message": msg})
-        return
+        webbrowser.open("https://www.youtube.com")
+        response = "Opening YouTube in your browser, sir."
 
     # ── Open Terminal ──────────────────────────────────────────────────────
-    if "open terminal" in cmd:
+    elif "open terminal" in cmd:
         subprocess.run(["open", "-a", "Terminal"])
-        msg = "Opening Terminal..."
-        emit("command_result", {"status": "success", "message": msg})
-        return
+        response = "Launching Terminal, sir."
 
     # ── Open Finder ────────────────────────────────────────────────────────
-    if "open finder" in cmd:
+    elif "open finder" in cmd:
         subprocess.run(["open", "-a", "Finder"])
-        msg = "Opening Finder..."
-        emit("command_result", {"status": "success", "message": msg})
-        return
+        response = "Opening Finder, sir."
 
     # ── Mute / Unmute ──────────────────────────────────────────────────────
-    if "mute" in cmd:
+    elif "mute" in cmd and "unmute" not in cmd:
         subprocess.run(["osascript", "-e", "set volume output muted true"])
-        msg = "Audio muted."
-        emit("command_result", {"status": "success", "message": msg})
-        return
-    if "unmute" in cmd:
+        response = "System audio muted."
+
+    elif "unmute" in cmd:
         subprocess.run(["osascript", "-e", "set volume output muted false"])
-        msg = "Audio unmuted."
-        emit("command_result", {"status": "success", "message": msg})
-        return
+        response = "System audio unmuted."
+
+    # ── System Check / Specs / CPU / RAM ───────────────────────────────────
+    elif any(kw in cmd for kw in ["system check", "specs", "cpu", "ram"]):
+        info = get_system_info()
+        response = (
+            f"System Stats — "
+            f"CPU Usage: {info.get('cpu', 0)}% | "
+            f"RAM Usage: {info.get('memory', 0)}%"
+        )
 
     # ── Default fallback ───────────────────────────────────────────────────
-    msg = f"Command received: {cmd}"
-    emit("command_result", {"status": "success", "message": msg})
+    else:
+        response = f"Command executed: '{raw_cmd}'"
 
-
-# ---------------------------------------------------------------------------
-# Background Telemetry (with app context)
-# ---------------------------------------------------------------------------
-
-def background_status_telemetry():
-    """Emit live CPU/RAM metrics every 3 seconds inside app context."""
-    while True:
-        try:
-            with app.app_context():
-                info = get_system_info()
-                socketio.emit("status_update", {
-                    "state": "CONNECTED",
-                    "cpu": info.get("cpu", 0),
-                    "memory": info.get("memory", 0),
-                    "model": "big-pickle"
-                }, broadcast=True)
-            socketio.sleep(3)
-        except Exception as e:
-            print(f"[BACKGROUND] Telemetry error: {e}", flush=True)
-            break
+    # MUST ALWAYS emit command_result
+    emit("command_result", {"status": "success", "message": response})
 
 
 # ---------------------------------------------------------------------------
@@ -182,29 +137,12 @@ def background_status_telemetry():
 
 @app.route("/")
 def index():
-    return send_from_directory(".", "index.html")
-
-
-@app.route("/<path:path>")
-def static_proxy(path):
-    if os.path.exists(path):
-        return send_from_directory(".", path)
-    return jsonify({"error": "not found"}), 404
+    return render_template("index.html")
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
-def main():
-    port = int(os.getenv("PORT", 5000))
-    host = os.getenv("HOST", "127.0.0.1")
-    debug = os.getenv("FLASK_DEBUG", "0") not in ("1", "true", "True")
-
-    print(f"▶️  Virtual Butler backend starting on {host}:{port}", flush=True)
-    socketio.start_background_task(background_status_telemetry)
-    socketio.run(app, host=host, port=port, debug=debug)
-
-
 if __name__ == "__main__":
-    main()
+    socketio.run(app, host="127.0.0.1", port=5000, debug=True)
