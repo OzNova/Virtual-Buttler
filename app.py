@@ -13,11 +13,14 @@ latest template/markup during development.
 
 import os
 import re
+import json
 import random
 import datetime
 import difflib
 import subprocess
 import webbrowser
+import urllib.request
+import urllib.error
 
 from flask import Flask, render_template, request, jsonify
 
@@ -25,6 +28,23 @@ app = Flask(__name__)
 
 # Auto-reload templates from disk on every request during development.
 app.config["TEMPLATES_AUTO_RELOAD"] = True
+
+# ---------------------------------------------------------------------------
+# Gemini LLM (natural chat fallback when no system command matches)
+# ---------------------------------------------------------------------------
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# NOTE: gemini-2.5-flash is decommissioned for new accounts (HTTP 404). The
+# working replacement on this key is gemini-3.6-flash.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+
+# JARVIS persona injected as context for natural, on-brand answers.
+JARVIS_PERSONA = (
+    "You are JARVIS, the user's personal macOS AI assistant addressed as 'sir'. "
+    "Be concise, sharp, and helpful — 1 or 2 sentences max. Never claim to have "
+    "performed a system action; system actions are handled by local handlers."
+)
 
 
 @app.after_request
@@ -94,6 +114,44 @@ def _alias_hit(text, alias):
         if _ratio(alias, token) >= 0.72:
             return True
     return False
+
+
+def _gemini_chat(text):
+    """Ask Gemini for a natural conversational reply, or None on failure."""
+    if not GEMINI_API_KEY:
+        return None
+
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": f"{JARVIS_PERSONA}\n\nUser: {text}\nJARVIS:"}
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 500,
+        },
+    }
+
+    req = urllib.request.Request(
+        GEMINI_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": GEMINI_API_KEY,
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        text_out = (data["candidates"][0]["content"]["parts"][0].get("text") or "").strip()
+        return text_out or None
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +331,13 @@ def generate_smart_response(text):
         speak(reply)
         return reply
 
-    # ── Conversational intents ──────────────────────────────────────────
+    # ── Natural chat via Gemini (when no system command matches) ────────
+    llm_reply = _gemini_chat(text)
+    if llm_reply:
+        speak(llm_reply)
+        return llm_reply
+
+    # ── Local conversational intents (Gemini unavailable fallback) ──────
     for intent, data in CONVERSATIONAL.items():
         if any(re.search(r"\b" + re.escape(p) + r"\b", clean) for p in data["patterns"]):
             return random.choice(data["responses"])
