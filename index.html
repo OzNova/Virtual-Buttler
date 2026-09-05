@@ -732,7 +732,8 @@ const BACKEND_URL = 'http://127.0.0.1:5000';
 
     // Handle command_result from backend
     socket.on('command_result', (data) => {
-      addMessage(data.text, true);
+      const msg = data.message || data.status || 'Command processed';
+      addMessage(msg, true);
       updateSystemInfo({ latency: data.latency });
     });
 
@@ -811,8 +812,10 @@ const BACKEND_URL = 'http://127.0.0.1:5000';
       const text = commandInput.value.trim();
       if (!text) return;
       
-      addMessage(text, true);
-      socket.emit('send_command', { text });
+      // Emit send_command with { command: inputText }
+      socket.emit('send_command', { command: text });
+      
+      // Clear input
       commandInput.value = '';
     }
 

@@ -7,6 +7,7 @@ Serves the HUD UI and handles real-time voice engine events.
 import os
 import time
 import logging
+import webbrowser
 from flask import Flask, send_from_directory, jsonify, request
 from flask_socketio import SocketIO, emit
 
@@ -89,20 +90,39 @@ def handle_voice_stop():
     emit("system_event", {"message": "Processing…"})
 
 
-@socketio.on("action")
-def handle_action(data):
-    """Receive a text command from the frontend and return a JSON action."""
+@socketio.on("send_command")
+def handle_send_command(data):
+    """Receive a text command from the frontend and process it."""
     text = data.get("text", "") if data else ""
     if not text:
         return
 
-    print(f"[BACKEND] Action requested: \"{text}\"", flush=True)
+    print(f"[BACKEND] Command received: \"{text}\"", flush=True)
 
-    # TODO: In a full integration, this would feed into the Python assistant
-    # For now, echo back a structured response
+    # Parse command and trigger appropriate action
+    response_text = text  # default: echo back
+    success = True
+
+    # Handle specific commands
+    text_lower = text.lower().strip()
+    if "open youtube" in text_lower:
+        webbrowser.open('https://www.youtube.com')
+        response_text = "Opening YouTube..."
+    elif "open app" in text_lower:
+        # Extract app name if provided
+        response_text = "Opening application..."
+    elif "set volume" in text_lower:
+        response_text = "Setting volume..."
+    elif "shell" in text_lower:
+        response_text = "Executing shell command..."
+    else:
+        # Fallback: treat as conversational text
+        success = False
+        response_text = f"I heard you say: '{text}'"
+
     emit("command_result", {
-        "text": f"Command received: {text}",
-        "success": True
+        "status": "success" if success else "info",
+        "message": response_text
     })
 
 
