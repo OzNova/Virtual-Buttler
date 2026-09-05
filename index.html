@@ -6,20 +6,21 @@
   <title>Virtual Butler — AI Assistant</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0a0e17;
-      --bg-secondary: #111827;
-      --fg: #e8edf5;
-      --muted: #6b7a90;
-      --accent: #00d4aa;
-      --accent-dim: rgba(0, 212, 170, 0.12);
-      --card: #161c2c;
-      --border: rgba(0, 212, 170, 0.18);
-      --error: #ff4757;
-      --success: #00d4aa;
-      --warning: #f6ad55;
+      --bg: #0a0a0f;
+      --bg-secondary: #12121f;
+      --bg-tertiary: #1a1a24;
+      --fg: #e8e8f0;
+      --muted: #6b6b80;
+      --accent: #00ffcc;
+      --accent-dim: rgba(0, 255, 204, 0.08);
+      --card: #16161f;
+      --border: rgba(0, 255, 204, 0.12);
+      --error: #ff5f57;
+      --success: #00ffcc;
+      --warning: #ffb347;
     }
 
     * {
@@ -30,19 +31,22 @@
 
     html {
       height: 100%;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
       min-height: 100%;
-      font-family: 'Inter', sans-serif;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
       background: var(--bg);
       color: var(--fg);
       line-height: 1.5;
       -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow-x: hidden;
     }
 
     .mono {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
     }
 
     .bg-pattern {
@@ -50,8 +54,8 @@
       inset: 0;
       pointer-events: none;
       background:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 212, 170, 0.08), transparent 50%),
-        radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0, 100, 150, 0.06), transparent 50%),
+        radial-gradient(ellipse 100% 50% at 50% -30%, rgba(0, 255, 204, 0.06), transparent 50%),
+        radial-gradient(ellipse 80% 60% at 100% 100%, rgba(0, 150, 200, 0.05), transparent 50%),
         linear-gradient(180deg, var(--bg) 0%, var(--bg-secondary) 100%);
       z-index: 0;
     }
@@ -60,10 +64,10 @@
       position: fixed;
       inset: 0;
       pointer-events: none;
-      background: 
-        linear-gradient(rgba(0, 212, 170, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 212, 170, 0.03) 1px, transparent 1px);
-      background-size: 60px 60px;
+      background:
+        linear-gradient(rgba(0, 255, 204, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 255, 204, 0.02) 1px, transparent 1px);
+      background-size: 80px 80px;
       z-index: 1;
     }
 
@@ -75,62 +79,92 @@
       flex-direction: column;
       max-width: 1400px;
       margin: 0 auto;
-      padding: 24px 20px;
+      padding: 40px 32px 32px;
+      gap: 32px;
     }
 
     .header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 32px;
-      padding-bottom: 24px;
-      border-bottom: 1px solid var(--border);
+      justify-space-between;
+      gap: 24px;
+      padding: 16px 24px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      backdrop-filter: blur(10px);
     }
 
-    .logo {
+    .header .logo {
       display: flex;
       align-items: center;
       gap: 12px;
     }
 
-    .logo-icon {
+    .header .logo-icon {
       width: 48px;
       height: 48px;
-      background: linear-gradient(135deg, var(--accent), #00a896);
-      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), #00ccbb);
+      border-radius: 20px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
 
-    .logo-icon svg {
-      width: 24px;
-      height: 24px;
-      filter: drop-shadow(0 0 12px rgba(0, 212, 170, 0.5));
+    .header .logo-icon svg {
+      width: 28px;
+      height: 28px;
+      filter: drop-shadow(0 0 24px rgba(0, 255, 204, 0.4));
     }
 
-    .logo-text {
+    .header .logo-text {
       font-family: 'Inter', sans-serif;
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 700;
       letter-spacing: -0.02em;
     }
 
-    .logo-text span {
+    .header .logo-text span {
       color: var(--accent);
     }
 
-    .header-info {
+    .header .info {
       display: flex;
       align-items: center;
       gap: 16px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      transition: all 0.3s ease;
+    }
+
+    .status-badge.connected {
+      background: rgba(0, 255, 204, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(0, 255, 204, 0.3);
+    }
+
+    .status-badge.disconnected {
+      background: rgba(255, 95, 87, 0.15);
+      color: var(--error);
+      border: 1px solid rgba(255, 95, 87, 0.3);
     }
 
     .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: var(--accent);
+      background: var(--muted);
+      box-shadow: 0 0 12px rgba(0, 255, 204, 0.3);
       animation: pulse-soft 2s ease-in-out infinite;
     }
 
@@ -139,45 +173,83 @@
       50% { opacity: 0.5; }
     }
 
+    .status-dot.connected {
+      background: var(--accent);
+      box-shadow: 0 0 20px rgba(0, 255, 204, 0.5);
+    }
+
+    .status-dot.disconnected {
+      background: var(--error);
+      box-shadow: 0 0 20px rgba(255, 95, 87, 0.5);
+    }
+
     .status-text {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--muted);
       text-transform: uppercase;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.15em;
+    }
+
+    .nav-indicator {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--muted);
+      transition: all 0.2s ease;
+    }
+
+    .nav-indicator.online {
+      background: rgba(0, 255, 204, 0.1);
+      border-color: var(--accent);
+      color: var(--accent);
     }
 
     .card {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 24px;
-      margin-bottom: 20px;
+      border-radius: 24px;
+      padding: 32px;
+      margin-bottom: 32px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+      transition: box-shadow 0.3s ease;
+    }
+
+    .card:hover {
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     }
 
     .card-title {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.15em;
-      margin-bottom: 16px;
-      padding-bottom: 8px;
+      margin-bottom: 24px;
+      padding-bottom: 12px;
       border-bottom: 1px solid var(--border);
     }
 
     .controls {
       display: flex;
-      gap: 12px;
-      margin-top: 16px;
+      gap: 16px;
+      margin-top: 24px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
 
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       padding: 12px 24px;
-      border-radius: 10px;
+      border-radius: 20px;
       font-family: 'Inter', sans-serif;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 500;
       cursor: pointer;
       border: none;
@@ -195,8 +267,9 @@
     }
 
     .btn-primary:hover {
-      background: #00e5bb;
-      box-shadow: 0 4px 20px rgba(0, 212, 170, 0.3);
+      background: #00ffdd;
+      box-shadow: 0 4px 24px rgba(0, 255, 204, 0.3);
+      transform: translateY(-1px);
     }
 
     .btn-secondary {
@@ -208,29 +281,30 @@
     .btn-secondary:hover {
       border-color: var(--accent);
       color: var(--accent);
+      transform: translateY(-1px);
     }
 
     .btn-danger {
-      background: rgba(255, 71, 87, 0.1);
+      background: rgba(255, 95, 87, 0.1);
       color: var(--error);
-      border: 1px solid rgba(255, 71, 87, 0.3);
+      border: 1px solid rgba(255, 95, 87, 0.3);
     }
 
     .btn-danger:hover {
-      background: rgba(255, 71, 87, 0.2);
+      background: rgba(255, 95, 87, 0.15);
       border-color: var(--error);
     }
 
     .voice-indicator {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       margin-top: 8px;
     }
 
     .voice-dot {
-      width: 10px;
-      height: 10px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
       background: var(--muted);
       animation: voice-dot 0.5s ease-in-out infinite;
@@ -238,38 +312,12 @@
 
     @keyframes voice-dot {
       0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.5); opacity: 0.5; }
+      50% { transform: scale(1.4); opacity: 0.5; }
     }
 
     .voice-dot.recording {
       background: var(--error);
       animation: none;
-    }
-
-    .status-panel {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin-top: 24px;
-    }
-
-    .status-item {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .status-item-value {
-      font-size: 24px;
-      font-weight: 600;
-      color: var(--accent);
-    }
-
-    .status-item-label {
-      font-size: 12px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
     }
 
     .chat-area {
@@ -278,12 +326,39 @@
       margin-top: 24px;
       padding-top: 24px;
       border-top: 1px solid var(--border);
+      scroll-behavior: smooth;
+    }
+
+    .chat-area::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .chat-area::-webkit-scrollbar-track {
+      background: var(--bg-secondary);
+      border-radius: 4px;
+    }
+
+    .chat-area::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    .chat-area::-webkit-scrollbar-thumb:hover {
+      background: var(--accent);
     }
 
     .message {
       display: flex;
       gap: 12px;
       margin-bottom: 16px;
+      animation: message-in 0.3s ease-out;
+    }
+
+    @keyframes message-in {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
     }
 
     .message.user {
@@ -291,14 +366,15 @@
     }
 
     .message-avatar {
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
+      width: 44px;
+      height: 44px;
+      border-radius: 22px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 14px;
       font-weight: 600;
+      flex-shrink: 0;
     }
 
     .message-avatar.user {
@@ -312,10 +388,11 @@
     }
 
     .message-bubble {
-      max-width: 70%;
-      padding: 12px 16px;
-      border-radius: 16px;
-      line-height: 1.5;
+      max-width: 78%;
+      padding: 16px 20px;
+      border-radius: 20px;
+      line-height: 1.4;
+      font-size: 14px;
     }
 
     .message-bubble.user {
@@ -329,13 +406,14 @@
     }
 
     .message-meta {
-      font-size: 10px;
+      font-size: 11px;
       color: var(--muted);
-      margin-top: 4px;
+      margin-top: 6px;
     }
 
     .message-meta.user {
       text-align: right;
+      font-size: 10px;
     }
 
     .input-area {
@@ -348,12 +426,12 @@
 
     .input-field {
       flex: 1;
-      padding: 12px 16px;
+      padding: 16px 20px;
       background: var(--bg-secondary);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 20px;
       color: var(--fg);
-      font-family: 'Inter', sans-serif;
+      font-family: 'JetBrains Mono', monospace;
       font-size: 14px;
       font-weight: 500;
       resize: none;
@@ -370,27 +448,27 @@
     }
 
     .send-btn {
-      padding: 0 24px;
+      padding: 0 32px;
     }
 
     .quick-actions {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 16px;
       margin-top: 24px;
     }
 
     .quick-action {
-      padding: 16px;
+      padding: 20px;
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 20px;
       cursor: pointer;
       transition: all 0.2s ease;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
     }
 
     .quick-action:hover {
@@ -406,18 +484,18 @@
 
     .system-info {
       margin-top: 24px;
-      padding: 20px;
+      padding: 24px;
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 20px;
     }
 
     .system-info h3 {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.1em;
-      margin-bottom: 16px;
+      margin-bottom: 20px;
     }
 
     .system-info ul {
@@ -427,22 +505,43 @@
     .system-info li {
       display: flex;
       justify-content: space-between;
-      padding: 8px 0;
+      padding: 12px 0;
       border-bottom: 1px solid var(--border);
     }
 
     .system-info .key {
       color: var(--muted);
+      font-size: 13px;
     }
 
     .system-info .value {
-      color: var(--fg);
+      color: var(--accent);
       font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+    }
+
+    .system-info .value.critical {
+      color: var(--error);
     }
 
     @media (prefers-reduced-motion: reduce) {
       .voice-dot {
         animation: none;
+      }
+      .message {
+        animation: none;
+      }
+    }
+
+    /* Reduced height for textarea on mobile */
+    @media (max-width: 640px) {
+      .input-field {
+        padding: 14px 16px;
+        font-size: 13px;
+      }
+      .btn-primary {
+        padding: 0 20px;
+        font-size: 12px;
       }
     }
   </style>
@@ -457,7 +556,8 @@
         <div class="logo-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M5 3v6h14V3H5z"/></svg></div>
         <div class="logo-text">Virtual Butler</div>
       </div>
-      <div class="header-info">
+      <div class="info">
+        <div class="status-badge disconnected" id="status-badge">Disconnected</div>
         <div class="status-dot" id="status-dot"></div>
         <div class="status-text" id="status-text">Disconnected</div>
       </div>
@@ -503,16 +603,30 @@
 
     const BACKEND_URL = 'http://127.0.0.1:5000';
 
-    // Initialize Socket.IO connection
+    // Initialize Socket.IO connection with auto-reconnection config
     const socket = io(BACKEND_URL, {
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
-      reconnectionDelay: 2000
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000
+    });
+
+    // Track connection state
+    let isConnected = false;
+    let reconnectTimer = null;
+
+    // On successful connection, update status and load system info
+    socket.on('connect', () => {
+      isConnected = true;
+      updateStatus(true);
+      loadSystemInfoOnConnect();
     });
 
     const chatArea = document.getElementById('chat-area');
     const commandInput = document.getElementById('command-input');
     const sendBtn = document.getElementById('send-btn');
+    const statusBadge = document.getElementById('status-badge');
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
     const systemStatus = document.getElementById('system-status');
@@ -531,12 +645,9 @@
       div.className = `message ${isUser ? 'user' : 'assistant'}`;
       
       const avatarClass = isUser ? 'user' : 'assistant';
-      const avatarColor = isUser ? 'var(--accent)' : 'var(--card)';
       
       div.innerHTML = `
-        <div class="message-avatar ${avatarClass}" style="background: ${isUser ? 'var(--accent)' : 'var(--card)'}; color: ${avatarColor}">
-          ${isUser ? 'U' : 'B'}
-        </div>
+        <div class="message-avatar ${avatarClass}">${isUser ? 'U' : 'B'}</div>
         <div class="message-bubble ${isUser ? 'user' : 'assistant'}">
           ${escapeHtml(text)}
         </div>
@@ -559,10 +670,21 @@
       return new Date().toLocaleTimeString([], { minute: '2-digit', second: '2-digit' });
     }
 
-    function updateStatus(connected) {
-      statusDot.style.background = connected ? 'var(--accent)' : 'var(--muted)';
+    function updateStatus(connected, initializing = false) {
+      isConnected = connected;
+      
+      const statusClass = connected ? 'connected' : 'disconnected';
+      statusBadge.className = `status-badge ${statusClass}`;
       statusText.textContent = connected ? 'Connected' : 'Disconnected';
+      statusDot.className = `status-dot ${statusClass}`;
       statusDot.classList.toggle('recording', false);
+      
+      // Save state to localStorage
+      try {
+        localStorage.setItem('butlerConnectionState', connected ? 'connected' : 'disconnected');
+      } catch (e) {
+        // localStorage may be full or disabled
+      }
     }
 
     function setListening(listening) {
@@ -570,11 +692,78 @@
       isListening = listening;
     }
 
-    function updateSystemInfo(info) {
-      if (info.status) systemStatus.textContent = info.status;
-      if (info.model) systemModel.textContent = info.model;
-      if (info.latency !== undefined) systemLatency.textContent = info.latency;
+    function loadSystemInfoOnConnect() {
+      socket.emit('system_check', {});
     }
+
+    function updateSystemInfo(info) {
+      if (info.status) {
+        systemStatus.textContent = info.status;
+        const statusClass = info.status === 'Connected' ? 'connected' : 'disconnected';
+        systemStatus.className = `value ${statusClass}`;
+      }
+      if (info.model) systemModel.textContent = info.model;
+      if (info.latency !== undefined) {
+        const latencyMs = typeof info.latency === 'number' ? info.latency : parseInt(info.latency);
+        systemLatency.textContent = isNaN(latencyMs) ? '--' : latencyMs + 'ms';
+        systemLatency.classList.remove('critical');
+        if (latencyMs > 200) {
+          systemLatency.classList.add('critical');
+        }
+      }
+    }
+
+    // Handle system_check response from backend
+    socket.on('system_check_response', (data) => {
+      updateSystemInfo(data);
+    });
+
+    // Handle status_update from backend
+    socket.on('status_update', (data) => {
+      const { state, model, latency } = data || {};
+      
+      // Update connection state
+      updateStatus(state === 'CONNECTED');
+      
+      // Update system info
+      if (model) systemModel.textContent = model;
+      if (latency !== undefined) {
+        const latencyMs = typeof latency === 'number' ? latency : parseInt(latency);
+        systemLatency.textContent = isNaN(latencyMs) ? '--' : latencyMs + 'ms';
+      }
+    });
+
+    // Handle command_result from backend
+    socket.on('command_result', (data) => {
+      addMessage(data.text, true);
+      updateSystemInfo({ latency: data.latency });
+    });
+
+    // Handle system_event from backend
+    socket.on('system_event', (data) => {
+      if (data.message) {
+        addMessage(data.message, false);
+      }
+      if (data.status) {
+        updateStatus(true, false);
+      }
+      if (data.model) {
+        systemModel.textContent = data.model;
+      }
+      if (data.latency !== undefined) {
+        const latencyMs = typeof data.latency === 'number' ? data.latency : parseInt(data.latency);
+        systemLatency.textContent = isNaN(latencyMs) ? '--' : latencyMs + 'ms';
+      }
+    });
+
+    // Handle error events
+    socket.on('error', (data) => {
+      console.error('Socket error:', data);
+      if (data.message && isConnected) {
+        updateStatus(false);
+        showToast(data.message, 'error');
+      }
+    });
 
     // Event listeners
     sendBtn.addEventListener('click', sendCommand);
@@ -585,12 +774,48 @@
       }
     });
 
+    // Auto-reconnect handling
+    function handleReconnect() {
+      if (!isConnected) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(() => {
+          socket.connect();
+        }, 3000);
+      }
+    }
+
+    socket.on('connect_error', (error) => {
+      console.error('Connection error:', error);
+      updateStatus(false);
+      showToast('Connection lost. Reconnecting...', 'warning');
+    });
+
+    socket.on(' reconnect_attempt', (attempt) => {
+      console.log(`Reconnection attempt ${attempt}`);
+    });
+
+    socket.on('reconnect', () => {
+      isConnected = true;
+      updateStatus(true);
+      loadSystemInfoOnConnect();
+      showToast('Reconnected successfully', 'success');
+    });
+
+    socket.on('reconnect_error', () => {
+      showToast('Failed to reconnect. Checking connectivity...', 'error');
+    });
+
+    socket.on('reconnect_failed', () => {
+      showToast('Could not reconnect. Please refresh the page.', 'error');
+    });
+
+    // Send command
     function sendCommand() {
       const text = commandInput.value.trim();
       if (!text) return;
       
       addMessage(text, true);
-      socket.emit('action', { text });
+      socket.emit('send_command', { text });
       commandInput.value = '';
     }
 
@@ -621,34 +846,49 @@
       { label: 'Set Volume', svg: '<polyline points="21 15 16 10 5 21"/>', command: 'set_volume 70' }
     ]);
 
-    // Socket event listeners
-    socket.on('connect', () => {
-      updateStatus(true);
-    });
+    // Toast notifications
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      const typeStyles = {
+        success: 'background: rgba(0, 255, 204, 0.2); border: 1px solid var(--success);',
+        error: 'background: rgba(255, 95, 87, 0.2); border: 1px solid var(--error);',
+        warning: 'background: rgba(246, 173, 85, 0.2); border: 1px solid var(--warning);',
+        info: 'background: rgba(0, 150, 200, 0.2); border: 1px solid #0096c8;'
+      };
+      
+      toast.style.cssText = `
+        ${typeStyles[type] || typeStyles.info}
+        padding: 14px 20px;
+        border-radius: 16px;
+        margin: 16px 0;
+        color: var(--fg);
+        font-size: 13px;
+        backdrop-filter: blur(10px);
+        animation: slide-in 0.3s ease-out;
+      `;
+      toast.textContent = message;
+      
+      chatArea.prepend(toast);
+      
+      setTimeout(() => {
+        toast.style.animation = 'slide-out 0.3s ease-in';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
 
-    socket.on('disconnect', () => {
-      updateStatus(false);
-    });
-
-    socket.on('transcript', (data) => {
-      addMessage(data.text);
-    });
-
-    socket.on('response', (data) => {
-      addMessage(data.text);
-      updateSystemInfo({ latency: data.latency });
-    });
-
-    socket.on('system', (data) => {
-      // Show system messages
-      if (data.message) {
-        addMessage(data.text, false);
+    // Add CSS for toast animations
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slide-in {
+        from { opacity: 0; transform: translateY(-8px); }
+        to { opacity: 1; transform: translateY(0); }
       }
-    });
-
-    socket.on('error', (data) => {
-      console.error('Socket error:', data);
-    });
+      @keyframes slide-out {
+        from { opacity: 1; transform: translateY(0); }
+        to { opacity: 0; transform: translateY(-8px); }
+      }
+    `;
+    document.head.appendChild(style);
   </script>
 
   <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
