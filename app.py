@@ -1,138 +1,108 @@
 """JARVIS — macOS AI Assistant Backend.
 
-Flask-SocketIO server with clean, robust system integration.
+Flask REST API backend with native macOS system integration.
+No WebSockets or Socket.IO. Uses native fetch() calls from the frontend.
 """
 
 import os
 import subprocess
 import webbrowser
+import datetime
+import random
+from flask import Flask, render_template, request, jsonify
 import psutil
 
-from flask import Flask, render_template
-from flask_socketio import SocketIO, emit
-
-# ---------------------------------------------------------------------------
-# Flask + SocketIO Setup
-# ---------------------------------------------------------------------------
-
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "jarvis-secret")
-
-socketio = SocketIO(app, cors_allowed_origins="http://127.0.0.1:5000")
-
 
 # ---------------------------------------------------------------------------
-# Helpers: macOS System Control
+# Smart Response Engine
 # ---------------------------------------------------------------------------
 
-def open_app(name: str) -> str:
-    """Open an application by name using macOS 'open -a'."""
-    name = name.strip()
-    try:
-        subprocess.run(["open", "-a", name], check=True, capture_output=True)
-        return f"Opened application: {name}"
-    except Exception:
-        if name.startswith(("http://", "https://")):
-            webbrowser.open(name)
-            return f"Opened website: {name}"
-        return f"Could not open: {name}"
+KNOWLEDGE_BASE = {
+    "greetings": {
+        "patterns": ["hello", "hi", "hey", "good morning", "good afternoon"],
+        "responses": [
+            "Hello Ozan. All systems are fully operational.",
+            "Online and ready for your commands, sir.",
+            "Hey! How can I assist you with your system today?"
+        ]
+    },
+    "status": {
+        "patterns": ["how are you", "status", "whats up", "how do you do"],
+        "responses": [
+            "Running at peak performance, sir.",
+            "All background services are healthy and responsive.",
+            "I'm operating efficiently. What are we building or running today?"
+        ]
+    },
+    "identity": {
+        "patterns": ["who are you", "what are you", "your name"],
+        "responses": [
+            "I am JARVIS, your personal macOS AI assistant.",
+            "I am JARVIS, designed to execute system controls and manage your workspace."
+        ]
+    },
+    "thanks": {
+        "patterns": ["thanks", "thank you", "thankyou"],
+        "responses": [
+            "You're welcome, sir.",
+            "Always at your service.",
+            "Anytime, Ozan!"
+        ]
+    }
+}
 
 
-def set_volume_muted(muted: bool) -> str:
-    """Toggle system audio mute status via osascript."""
-    state = "on" if not muted else "off"
-    try:
-        subprocess.run(
-            ["osascript", "-e", f"set volume output muted {state}"],
-            check=True,
-            capture_output=True,
-        )
-        return "System audio muted." if muted else "System audio unmuted."
-    except Exception as e:
-        return f"Volume toggle failed: {e}"
+def generate_smart_response(text):
+    """Generate a natural, varied response for conversational inputs."""
+    clean_text = text.lower().strip()
 
-
-def get_system_info():
-    """Return CPU and RAM usage percentages using psutil."""
-    try:
-        cpu_percent = psutil.cpu_percent(interval=1)
-        mem = psutil.virtual_memory()
-        return {
-            "cpu": round(cpu_percent, 1),
-            "memory": round(mem.used / mem.total * 100, 1),
-            "memory_total": f"{mem.total / (1024 ** 3):.1f} GB",
-            "memory_available": f"{mem.available / (1024 ** 3):.1f} GB",
-        }
-    except Exception as e:
-        return {"cpu": 0, "memory": 0, "error": str(e)}
-
-
-# ---------------------------------------------------------------------------
-# Socket.IO Event Routing
-# ---------------------------------------------------------------------------
-
-@socketio.on("connect")
-def handle_connect():
-    print("[BACKEND] Client connected")
-    emit("status_update", {"status": "connected"})
-
-
-@socketio.on("disconnect")
-def handle_disconnect():
-    print("[BACKEND] Client disconnected")
-
-
-@socketio.on("send_command")
-def handle_send_command(data):
-    """Parse and route incoming commands. Always emit command_result."""
-    raw_cmd = data.get("command", "").strip() if data else ""
-    cmd = raw_cmd.lower()
-
-    response = ""
-
-    # ── Open YouTube ───────────────────────────────────────────────────────
-    if "open youtube" in cmd:
+    # ── macOS Sistem Komutları Tespiti ─────────────────────────────────────
+    if "open youtube" in clean_text:
         webbrowser.open("https://www.youtube.com")
-        response = "Opening YouTube in your browser, sir."
+        return "Opening YouTube in your browser, sir."
 
-    # ── Open Terminal ──────────────────────────────────────────────────────
-    elif "open terminal" in cmd:
+    if "open terminal" in clean_text:
         subprocess.run(["open", "-a", "Terminal"])
-        response = "Launching Terminal, sir."
+        return "Launching Terminal application, sir."
 
-    # ── Open Finder ────────────────────────────────────────────────────────
-    elif "open finder" in cmd:
+    if "open finder" in clean_text:
         subprocess.run(["open", "-a", "Finder"])
-        response = "Opening Finder, sir."
+        return "Opening Finder window, sir."
 
-    # ── Mute / Unmute ──────────────────────────────────────────────────────
-    elif "mute" in cmd and "unmute" not in cmd:
+    if "mute" in clean_text and "unmute" not in clean_text:
         subprocess.run(["osascript", "-e", "set volume output muted true"])
-        response = "System audio muted."
+        return "System audio muted, sir."
 
-    elif "unmute" in cmd:
+    if "unmute" in clean_text:
         subprocess.run(["osascript", "-e", "set volume output muted false"])
-        response = "System audio unmuted."
+        return "System audio unmuted, sir."
 
-    # ── System Check / Specs / CPU / RAM ───────────────────────────────────
-    elif any(kw in cmd for kw in ["system check", "specs", "cpu", "ram"]):
-        info = get_system_info()
-        response = (
-            f"System Stats — "
-            f"CPU Usage: {info.get('cpu', 0)}% | "
-            f"RAM Usage: {info.get('memory', 0)}%"
-        )
+    if any(k in clean_text for k in ["system check", "specs", "cpu", "ram", "telemetry"]):
+        cpu = psutil.cpu_percent()
+        ram = psutil.virtual_memory().percent
+        return f"System Telemetry — CPU: {cpu}% | RAM Usage: {ram}%"
 
-    # ── Default fallback ───────────────────────────────────────────────────
-    else:
-        response = f"Command executed: '{raw_cmd}'"
+    if any(k in clean_text for k in ["time", "saat", "clock"]):
+        now = datetime.datetime.now().strftime("%H:%M")
+        return f"Current local time is {now}, sir."
 
-    # MUST ALWAYS emit command_result
-    emit("command_result", {"status": "success", "message": response})
+    # ── Doğal Dil ve Sohbet Tespiti ───────────────────────────────────────
+    for intent, data in KNOWLEDGE_BASE.items():
+        if any(pattern in clean_text for pattern in data["patterns"]):
+            return random.choice(data["responses"])
+
+    # 3. Genel Esnek Cevap Motoru (Bilinmeyen Cümleler İçin)
+    fallback_responses = [
+        f"I've analyzed '{text}'. While it's not a recognized system command, I'm logging it.",
+        f"Understood. Currently, I can open apps (YouTube, Terminal, Finder), adjust volume, or show system stats.",
+        f"I heard: '{text}'. Try asking me for 'system check' or to 'open terminal'."
+    ]
+    return random.choice(fallback_responses)
 
 
 # ---------------------------------------------------------------------------
-# Routes
+# Flask Routes
 # ---------------------------------------------------------------------------
 
 @app.route("/")
@@ -140,9 +110,22 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/api/command", methods=["POST"])
+def handle_command():
+    """Accept JSON {"command": "text"} and return {"status": "success", "message": "response_text"}."""
+    data = request.get_json() or {}
+    raw_cmd = data.get("command", "").strip()
+
+    if not raw_cmd:
+        return jsonify({"status": "error", "message": "Empty command"}), 400
+
+    response_text = generate_smart_response(raw_cmd)
+    return jsonify({"status": "success", "message": response_text})
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    socketio.run(app, host="127.0.0.1", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=True)

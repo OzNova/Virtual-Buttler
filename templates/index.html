@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS AI</title>
+  <style>
+    /* ---------- Design System: Dark / Glassmorphism ---------- */
+    :root {
+      --bg: #08080c;
+      --bg-secondary: #12131c;
+      --bg-tertiary: #1a1b21;
+      --fg: #e8e8f0;
+      --muted: #5a5a6e;
+      --accent: #00ffcc;
+      --card: #161a1f;
+      --border: rgba(0, 255, 204, 0.1);
+      --glass: rgba(8, 8, 12, 0.7);
+      --glow-connected: rgba(0, 255, 204, 0.3);
+    }
+
+    * {
+      margin: 0; padding: 0; box-sizing: border-box;
+    }
+
+    html { height: 100%; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      min-height: 100%;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+    /* ---------- Page Background & Glass Panel ---------- */
+    .page-bg {
+      position: fixed; inset: 0; pointer-events: none;
+      background: var(--bg);
+      z-index: -1;
+    }
+
+    .glass-panel {
+      position: relative; z-index: 1;
+      max-width: 900px; margin: 24px auto auto auto; padding: 32px 24px 48px;
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-radius: 24px; border: 1px solid var(--border);
+      background: var(--card); min-height: 90vh; display: flex; flex-direction: column;
+    }
+
+    /* ---------- Header ---------- */
+    .header {
+      display: flex; justify-content: space-between; align-items: center; padding: 12px 20px;
+      background: var(--bg-secondary); border-radius: 16px 16px 0 0; border-bottom: 1px solid var(--border);
+    }
+
+    .header-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .badge {
+      padding: 6px 12px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3em;
+      transition: all 0.2s; border: 1px solid var(--border);
+    }
+    .badge.ready { background: rgba(0, 255, 204, 0.12); color: var(--accent); border-color: var(--accent); box-shadow: 0 0 16px var(--glow-connected); }
+    .badge.offline { background: rgba(255, 55, 55, 0.12); color: #ff3e3e; border-color: #ff3e3e; box-shadow: 0 0 16px rgba(255,55,55,0.3); }
+
+    /* ---------- Chat Container ---------- */
+    .chat-container { flex: 1; overflow-y: auto; padding: 24px 20px 20px; }
+
+    .message {
+      display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; font-size: 14px; word-break: break-word;
+    }
+    .message.user { justify-content: flex-end; }
+    .message.assistant { justify-content: flex-start; }
+
+    .avatar {
+      width: 28px; height: 28px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600;
+    }
+    .avatar.user { background: var(--accent); color: var(--bg); }
+    .avatar.assistant { background: var(--card); color: var(--muted); }
+
+    .bubble {
+      max-width: 65%; width: fit-content; padding: 10px 14px; border-radius: 18px 12px 12px 18px;
+      font-size: 13px; line-height: 1.4; word-break: break-word; font-weight: 500;
+    }
+    .bubble.user { background: var(--accent); color: var(--bg); margin-left: auto; }
+    .bubble.assistant { background: rgba(255,255,255,0.04); color: var(--fg); border: 1px solid var(--border); border-radius: 12px 18px 18px 12px; }
+
+    .meta { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+    /* ---------- Quick Actions Dock ---------- */
+    .actions-dock {
+      padding: 20px 24px; background: var(--bg-secondary); border-radius: 0 0 24px 24px; border-top: 1px solid var(--border);
+    }
+    .actions-dock .title { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 12px; }
+    .actions-dock .btn {
+      padding: 8px 14px; border: none; border-radius: 10px; cursor: pointer;
+      font-family: inherit; font-size: 12px; font-weight: 500; transition: background 0.15s;
+      background: var(--bg-tertiary); color: var(--fg);
+    }
+    .actions-dock .btn:hover { background: var(--accent); color: var(--bg); }
+    .actions-dock .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* ---------- Input Bar ---------- */
+    .input-bar { padding: 16px 20px; background: var(--bg-secondary); border-radius: 20px; border: 1px solid var(--border); }
+    .input-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 24px var(--glow-connected); }
+    .input-bar input { flex: 1; padding: 10px 14px; background: var(--bg-tertiary); border: none; border-radius: 14px; color: var(--fg); font-size: 13px; font-family: var(--mono); resize: none; outline: none; }
+    .input-bar input:focus { background: var(--bg-tertiary); }
+    .input-bar input::placeholder { color: var(--muted); }
+    .input-bar .btn { padding: 0 20px; background: var(--accent); color: var(--bg); border: none; border-radius: 14px; font-weight: 600; font-size: 13px; cursor: pointer; min-width: 72px; }
+
+    @media (max-width: 600px) {
+      .glass-panel { padding: 16px; min-height: auto; }
+      .header { padding: 10px 16px; border-radius: 12px 12px 0 0; }
+      .actions-dock { padding: 12px 16px; border-radius: 0 0 16px 16px; }
+      .actions-dock .btn { padding: 6px 10px; font-size: 11px; }
+      .input-bar { padding: 10px 12px; }
+      .input-bar input { font-size: 12px; }
+      .input-bar .btn { min-width: 50px; font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-bg"></div>
+
+  <div class="glass-panel">
+    <!-- ========= HEADER ========= -->
+    <header class="header">
+      <span class="header-title">JARVIS AI</span>
+      <span class="badge ready" id="status-badge">SYSTEM READY</span>
+    </header>
+
+    <!-- ========= CHAT CONTAINER ========= -->
+    <div class="chat-container" id="chat-container">
+      <!-- Messages injected by JS -->
+    </div>
+
+    <!-- ========= QUICK ACTIONS DOCK ========= -->
+    <div class="actions-dock">
+      <span class="title">Quick Actions</span>
+      <div class="btn" onclick="sendQuickCommand('open youtube')">YouTube</div>
+      <div class="btn" onclick="sendQuickCommand('open terminal')">Terminal</div>
+      <div class="btn" onclick="sendQuickCommand('open finder')">Finder</div>
+      <div class="btn" onclick="sendQuickCommand('mute')">Mute</div>
+      <div class="btn" onclick="sendQuickCommand('unmute')">Unmute</div>
+      <div class="btn" onclick="sendQuickCommand('system check')">System Check</div>
+    </div>
+  </div>
+
+  <!-- Input Bar (fixed at bottom) -->
+  <div class="input-bar" id="input-bar">
+    <input id="cmd-input" type="text" placeholder="Type a command…" autocomplete="off">
+    <button class="btn" onclick="sendMsg()">Send</button>
+  </div>
+
+  <!-- Socket.IO is NOT included — using native fetch() -->
+  <script>
+    /* ---------- DOM Elements ---------- */
+    const chatContainer = document.getElementById("chat-container");
+    const cmdInput = document.getElementById("cmd-input");
+    const statusBadge = document.getElementById("status-badge");
+
+    /* ---------- State ---------- */
+    let isConnected = true; /* Assume connected since the app starts up */
+
+    /* ---------- appendMessage ---------- */
+    function appendMessage(text, isUser) {
+      const msgDiv = document.createElement("div");
+      msgDiv.className = `message ${isUser ? "user" : "assistant"}`;
+
+      const avatar = document.createElement("div");
+      avatar.className = `avatar ${isUser ? "user" : "assistant"}`;
+      avatar.textContent = isUser ? "U" : "J";
+
+      const bubble = document.createElement("div");
+      bubble.className = `bubble ${isUser ? "user" : "assistant"}`;
+      bubble.textContent = text;
+
+      msgDiv.appendChild(avatar);
+      msgDiv.appendChild(bubble);
+      chatContainer.appendChild(msgDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    /* ---------- fetch /api/command ---------- */
+    function sendMsg() {
+      const text = cmdInput.value.trim();
+      if (!text) return;
+      appendMessage(text, true);
+      fetch("/api/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: text })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === "success") {
+            appendMessage(data.message, false);
+          }
+        })
+        .catch(err => {
+          appendMessage("Error communicating with server.", false);
+        });
+      cmdInput.value = "";
+    }
+
+    /* ---------- sendQuickCommand ---------- */
+    function sendQuickCommand(cmdText) {
+      const trimmed = (cmdText || "").trim();
+      if (!trimmed) return;
+      appendMessage(trimmed, true);
+      fetch("/api/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: trimmed })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === "success") {
+            appendMessage(data.message, false);
+          }
+        });
+    }
+
+    /* ---------- Enter Key Listener ---------- */
+    cmdInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { sendMsg(); }
+    });
+
+    /* ---------- Initial health check (optional) ---------- */
+    /* fetch("/api/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: "system check" })
+    }); */
+  </script>
+</body>
+</html>
