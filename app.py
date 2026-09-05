@@ -1,11 +1,9 @@
-"""Virtual Butler — Premium macOS AI Assistant Backend.
+"""Virtual Butler — macOS AI Assistant Backend.
 
-Flask + SocketIO server with full macOS system integration:
-- Open any app/website
-- Volume control via osascript
-- Real-time CPU/RAM telemetry via psutil
-- Conversational AI with command intent parsing
-- Real-time status telemetry (status_update)
+Flask + SocketIO server with clean, robust system integration:
+- Open apps, websites, manage volume, report system specs
+- Conversational AI fallback
+- Real-time telemetry (CPU/RAM) every 3 seconds
 - Reliable send_command / command_result pipeline
 """
 
@@ -20,7 +18,6 @@ import psutil
 
 from flask import Flask, send_from_directory, jsonify, request
 from flask_socketio import SocketIO, emit
-from datetime import datetime
 
 # ---------------------------------------------------------------------------
 # Flask + SocketIO Setup
@@ -38,7 +35,7 @@ if socketio_logger.strip() not in ("1", "true", "True"):
 
 socketio = SocketIO(app, cors_allowed_origins=["http://127.0.0.1:5000"])
 
-# Ensure background tasks run within app context
+# Push app context so background tasks work without errors
 ctx = app.app_context()
 ctx.push()
 
@@ -47,67 +44,70 @@ ctx.push()
 # Helpers: macOS System Control
 # ---------------------------------------------------------------------------
 
-def open_application(name: str):
-    """Open an app or website using macOS 'open' command."""
+def open_app(name: str) -> str:
+    """Open an application by name using macOS 'open -a'."""
     name = name.strip()
-    # If it looks like a URL, open directly
-    if name.startswith("http://") or name.startswith("https://"):
-        webbrowser.open(name)
-        return f"Opening website: {name}"
-    # Try launching via macOS 'open -a'
     try:
         subprocess.run(["open", "-a", name], check=True, capture_output=True)
-        return f"Opening application: {name}"
-    except subprocess.CalledProcessError:
-        # Fallback: try webbrowser if not an app
-        webbrowser.open(name)
-        return f"Opened via webbrowser: {name}"
+        return f"Opened application: {name}"
+    except Exception:
+        # Fallback: try as URL
+        if name.startswith(("http://", "https://")):
+            webbrowser.open(name)
+            return f"Opened website: {name}"
+        return f"Could not open: {name}"
 
 
-def set_volume(level: int):
-    """Set system output volume (0-100) via osascript."""
-    level = max(0, min(100, int(level)))
+def open_website(url: str) -> str:
+    webbrowser.open(url)
+    return f"Opening website: {url}"
+
+
+def set_volume_muted(muted: bool) -> str:
+    """Toggle system audio mute status via osascript."""
+    state = "on" if not muted else "off"
     try:
         subprocess.run(
-            ["osascript", "-e", f"set volume output volume {level}"],
+            ["osascript", "-e", f"set volume output muted {state}"],
             check=True,
             capture_output=True,
         )
-        return f"Volume set to {level}%"
+        return f"Volume muted: {muted}"
     except Exception as e:
-        return f"Failed to set volume: {e}"
+        return f"Volume toggle failed: {e}"
 
 
 def get_system_info():
-    """Return CPU and RAM usage percentages."""
+    """Return CPU and RAM usage percentages using psutil."""
     try:
         cpu_percent = psutil.cpu_percent(interval=1)
         mem = psutil.virtual_memory()
         return {
             "cpu": round(cpu_percent, 1),
             "memory": round(mem.used / mem.total * 100, 1),
-            "memory_total": f"{mem.total / (1024**3):.1f} GB",
-            "memory_available": f"{mem.available / (1024**3):.1f} GB",
+            "memory_total": f"{mem.total / (1024 ** 3):.1f} GB",
+            "memory_available": f"{mem.available / (1024 ** 3):.1f} GB",
         }
     except Exception as e:
-        return {"cpu": "--", "memory": "--", "error": str(e)}
+        return {"cpu": 0, "memory": 0, "error": str(e)}
 
 
-def generate_assistant_response(text: str) -> str:
-    """Simple conversational fallback when no action is recognized."""
+def conversational_response(text: str) -> str:
+    """Simple fallback assistant responses."""
     t = text.lower().strip()
-    if any(w in t for w in ["hello", "hi", "hey", "how are you"]):
-        return "Hello sir! All systems nominal. How may I assist you today?"
-    if any(w in t for w in ["thank you", "thanks"]):
+    if any(w in t for w in ["hello", "hi", "hey"]):
+        return "Hello sir! Virtual Butler is online. How may I help?"
+    if any(w in t for w in ["thank", "thanks"]):
         return "You're very welcome, sir!"
-    if any(w in t for w in ["what's the time", "time"]):
-        return f"The current time is {datetime.now().strftime('%I:%M %p')}."
-    # Default fallback
+    if any(w in t for w in ["time", "what time"]):
+        return f"The time is {time.strftime('%I:%M %p')}."
+    if any(w in t for w in ["how are you", "status"]):
+        return "All systems nominal, sir. CPU and RAM running within normal ranges."
     return "I'm not sure I understand, sir. Could you rephrase?"
 
 
 # ---------------------------------------------------------------------------
-# Socket.IO Events
+# Socket.IO Event Routing
 # ---------------------------------------------------------------------------
 
 @socketio.on("connect")
@@ -115,10 +115,10 @@ def handle_connect():
     print("[BACKEND] Client connected.", flush=True)
     emit("status_update", {
         "state": "CONNECTED",
-        "model": "big-pickle",
-        "latency": 0,
-        "timestamp": datetime.utcnow().isoformat()
-    }, room=request.sid)
+        "cpu": 0,
+        "memory": 0,
+        "model": "big-pickle"
+    })
 
 
 @socketio.on("disconnect")
@@ -138,104 +138,75 @@ def handle_voice_stop():
 
 @socketio.on("send_command")
 def handle_send_command(data):
-    """Parse and intelligently handle incoming commands.
-
-    Supported intents:
-      - open <app|website>        → webbrowser.open / subprocess.run(['open', '-a', ...])
-      - set volume <0-100>        → osascript volume set
-      - system info / specs       → return CPU/RAM stats
-      - conversational / question → AI-generated response
-    """
+    """Parse and route incoming commands. Always emit command_result."""
     text = data.get("text", "") if data else ""
     if not text:
+        emit("command_result", {"status": "info", "message": "No command received."})
         return
 
-    print(f"[BACKEND] Command received: \"{text}\"", flush=True)
     text_lower = text.lower().strip()
+    print(f"[BACKEND] Command: \"{text}\"", flush=True)
 
-    # ── Intent: Open application or website ──────────────────────────────
-    if any(keyword in text_lower for keyword in ["open", "launch"]):
-        # Extract the target after "open" / "launch"
-        # Patterns: "open youtube", "open spotify", "open terminal"
-        target = text_lower
-        for keyword in ["open ", "launch "]:
-            target = target.replace(keyword, "", 1).strip()
+    # ── Open YouTube / Website ──────────────────────────────────────────
+    if "open youtube" in text_lower or "open youtube.com" in text_lower:
+        result = open_website("https://www.youtube.com")
+        emit("command_result", {"status": "success", "message": result})
+        return
 
-        # Check for volume sub-command
-        if "volume" in target:
-            # Extract level
-            level_str = target.replace("volume", "", 1).strip()
-            level = int(level_str) if level_str.isdigit() else 70
-            result = set_volume(level)
-        elif any(app in target for app in ["youtube", "spotify", "terminal", "finder", "chrome", "safari", "music", "calculator"]):
-            result = open_application(target)
-        else:
-            # Generic open
-            result = open_application(target)
+    # ── Open Terminal ────────────────────────────────────────────────────
+    if "open terminal" in text_lower:
+        result = open_app("Terminal")
+        emit("command_result", {"status": "success", "message": result})
+        return
 
-        emit("command_result", {
-            "status": "success",
-            "message": result,
-            "action": "open"
-        })
+    # ── Open Finder ──────────────────────────────────────────────────────
+    if "open finder" in text_lower:
+        result = open_app("Finder")
+        emit("command_result", {"status": "success", "message": result})
+        return
 
-    # ── Intent: Volume Control ───────────────────────────────────────────
-    elif "volume" in text_lower:
-        # Extract level if present
-        level_str = ""
-        for word in text_lower.split():
-            if word.isdigit():
-                level_str = word
-                break
-        level = int(level_str) if level_str else 70
-        result = set_volume(level)
-        emit("command_result", {
-            "status": "success",
-            "message": result,
-            "action": "volume"
-        })
+    # ── Mute / Unmute Volume ─────────────────────────────────────────────
+    if "mute volume" in text_lower or "toggle mute" in text_lower:
+        result = set_volume_muted(True)
+        emit("command_result", {"status": "success", "message": result})
+        return
+    if "unmute volume" in text_lower:
+        result = set_volume_muted(False)
+        emit("command_result", {"status": "success", "message": result})
+        return
 
-    # ── Intent: System Info / Specs ──────────────────────────────────────
-    elif any(kw in text_lower for kw in ["specs", "system info", "my computer", "computer info", "cpu", "ram"]):
+    # ── System Check (CPU/RAM) ──────────────────────────────────────────
+    if any(kw in text_lower for kw in ["system check", "cpu", "ram", "specs"]):
         info = get_system_info()
-        lines = [
-            f"CPU Usage: {info.get('cpu', '--')}%",
-            f"Memory Usage: {info.get('memory', '--')}%",
-        ]
-        if "error" not in info:
-            lines.append(f"Total RAM: {info.get('memory_total', '--')}")
-            lines.append(f"Available: {info.get('memory_available', '--')}")
-        emit("command_result", {
-            "status": "success",
-            "message": "\n".join(lines),
-            "action": "system_info"
-        })
+        msg = (f"CPU: {info.get('cpu', 0)}%\n"
+               f"RAM: {info.get('memory', 0)}%\n"
+               f"Total: {info.get('memory_total', '--')}\n"
+               f"Available: {info.get('memory_available', '--')}")
+        emit("command_result", {"status": "success", "message": msg})
+        return
 
-    # ── Conversational / Question Fallback ───────────────────────────────
-    else:
-        response = generate_assistant_response(text)
-        emit("command_result", {
-            "status": "info",
-            "message": response,
-            "action": "conversational"
-        })
+    # ── Conversational Fallback ──────────────────────────────────────────
+    response = conversational_response(text)
+    emit("command_result", {"status": "info", "message": response})
 
 
-# ── Background task for periodic status telemetry ──────────────────────────
+# ---------------------------------------------------------------------------
+# Background Telemetry (with app context)
+# ---------------------------------------------------------------------------
 
 def background_status_telemetry():
-    """Emit periodic status_update with real CPU/RAM metrics."""
+    """Emit live CPU/RAM metrics every 3 seconds inside app context."""
     while True:
         try:
-            socketio.sleep(8)
-            info = get_system_info()
-            emit("status_update", {
-                "state": "CONNECTED",
-                "model": "big-pickle",
-                "latency": 0,
-                "cpu": info.get("cpu", 0),
-                "memory": info.get("memory", 0),
-            }, broadcast=True)
+            with app.app_context():
+                info = get_system_info()
+                socketio.emit("status_update", {
+                    "state": "CONNECTED",
+                    "cpu": info.get("cpu", 0),
+                    "memory": info.get("memory", 0),
+                    "model": "big-pickle"
+                }, broadcast=True)
+            socketio.sleep(3)
         except Exception as e:
             print(f"[BACKGROUND] Telemetry error: {e}", flush=True)
             break
@@ -266,11 +237,8 @@ def main():
     host = os.getenv("HOST", "127.0.0.1")
     debug = os.getenv("FLASK_DEBUG", "0") not in ("1", "true", "True")
 
-    print(f"▶️  Virtual Butler macOS Assistant starting on {host}:{port}", flush=True)
-
-    # Start background telemetry task (with app context)
+    print(f"▶️  Virtual Butler backend starting on {host}:{port}", flush=True)
     socketio.start_background_task(background_status_telemetry)
-
     socketio.run(app, host=host, port=port, debug=debug)
 
 

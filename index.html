@@ -6,29 +6,23 @@
   <title>Virtual Butler — macOS AI Assistant</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
-    /* ---------- CSS Variables: Cyberpunk Dark Mode ---------- */
+    /* ---------- Design System: Modern Apple Dark Mode ---------- */
     :root {
-      --bg: #0a0a12;
-      --bg-secondary: #12121c;
-      --bg-tertiary: #1a1a24;
-      --fg: #e0e0f0;
-      --muted: #5a5a70;
-      --accent-cyan: #00ffcc;
-      --accent-purple: #bc13fe;
-      --accent-pink: #ff2e6e;
-      --card: #161620;
-      --border: rgba(0, 255, 204, 0.15);
-      --glass: rgba(10, 10, 18, 0.65);
-      --glow-cyan: 0 0 30px rgba(0, 255, 204, 0.4);
-      --glow-purple: 0 0 30px rgba(189, 19, 254, 0.3);
-      --success: #00ffcc;
-      --warning: #ffb347;
+      --bg: #0f0f1a;
+      --bg-secondary: #1a1a2e;
+      --bg-tertiary: #12121f;
+      --fg: #eaeaea;
+      --muted: #71717a;
+      --accent: #00d4aa;
+      --card: #1e1e2f;
+      --border: rgba(0, 212, 170, 0.1);
+      --success: #00d4aa;
+      --warning: #f5a623;
       --error: #ff5f57;
     }
 
-    /* ---------- Base Reset ---------- */
     * {
       margin: 0; padding: 0; box-sizing: border-box;
     }
@@ -44,203 +38,183 @@
       color: var(--fg);
       line-height: 1.5;
       -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
       overflow-x: hidden;
     }
 
     .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
 
-    /* ---------- Background Atmosphere ---------- */
-    .bg-layer {
-      position: fixed; inset: 0; pointer-events: none;
-      background:
-        radial-gradient(ellipse 100% 60% at 20% 20%, var(--glow-cyan), transparent 50%),
-        radial-gradient(ellipse 80% 50% at 80% 80%, var(--glow-purple), transparent 50%),
-        linear-gradient(180deg, var(--bg) 0%, var(--bg-secondary) 100%);
-      z-index: -1;
-    }
-
-    .grid-overlay {
-      position: fixed; inset: 0; pointer-events: none;
-      background: 
-        linear-gradient(rgba(0, 255, 204, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 255, 204, 0.03) 1px, transparent 1px);
-      background-size: 60px 60px;
-      z-index: -1;
-    }
-
-    /* ---------- Main Layout ---------- */
+    /* ---------- Layout: CSS Grid ---------- */
     .main {
-      position: relative; z-index: 1;
-      max-width: 1600px; margin: 0 auto; padding: 40px 32px 32px;
+      max-width: 1400px; margin: 0 auto; padding: 32px 24px;
       display: grid;
       grid-template-areas:
-        "header header"
-        "chat dock"
-        "input dock";
-      grid-template-columns: 1fr 280px;
+        "header    header"
+        "chat      actions"
+        "input     actions";
+      grid-template-columns: 1fr 220px;
       grid-template-rows: auto auto auto;
-      gap: 24px; max-height: 100vh; overflow-y: auto;
+      gap: 24px; height: 100vh; overflow-y: auto;
     }
 
-    /* ---------- Header (Telemetry + Status) ---------- */
+    /* ---------- Header: Status + System ---------- */
     .header {
-      grid-area: header;
-      display: flex; flex-direction: column; gap: 16px;
+      grid-area: header; display: flex; flex-direction: column; gap: 12px;
       align-items: stretch;
     }
 
     .header-top {
-      display: flex; justify-content: space-between; align-items: center;
-      width: 100%;
+      width: 100%; display: flex; justify-content: space-between;
+      align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border);
     }
 
     .status-bar {
-      display: flex; gap: 24px; align-items: center;
-      flex-wrap: wrap;
+      display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
     }
 
     .status-badge {
-      display: inline-flex; gap: 6px; padding: 8px 16px;
-      border-radius: 28px; font-size: 12px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.15em;
-      transition: all 0.3s ease; border: 1px solid var(--border);
+      display: inline-flex; gap: 6px; padding: 8px 14px;
+      border-radius: 20px; font-size: 12px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      transition: all 0.2s ease; border: 1px solid var(--border);
     }
     .status-badge.connected {
-      background: rgba(0, 255, 204, 0.12); color: var(--accent-cyan);
-      border-color: var(--accent-cyan); box-shadow: var(--glow-cyan);
+      background: rgba(0, 212, 170, 0.12); color: var(--accent);
+      border-color: var(--accent); box-shadow: 0 0 20px rgba(0, 212, 170, 0.3);
     }
     .status-badge.disconnected {
-      background: rgba(255, 95, 87, 0.12); color: var(--error);
-      border-color: var(--error); box-shadow: var(--glow-purple);
+      background: rgba(95, 95, 95, 0.12); color: var(--muted);
+      border-color: var(--muted);
     }
 
     .status-dot {
-      width: 10px; height: 10px; border-radius: 50%;
+      width: 8px; height: 8px; border-radius: 50%;
       animation: pulse-soft 2s ease-in-out infinite;
     }
-    .status-dot.connected { background: var(--accent-cyan); box-shadow: 0 0 20px rgba(0, 255, 204, 0.5); }
-    .status-dot.disconnected { background: var(--error); box-shadow: 0 0 20px rgba(255, 95, 87, 0.5); }
+    .status-dot.connected { background: var(--accent); box-shadow: 0 0 16px rgba(0, 212, 170, 0.4); }
+    .status-dot.disconnected { background: var(--muted); }
 
-    .status-text { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
-    .cpu-ram { display: flex; gap: 24px; align-items: center; font-family: 'JetBrains Mono', monospace; }
-    .cpu-ram .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .cpu-ram .value { color: var(--accent-cyan); font-size: 18px; }
+    .status-text { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+    .cpu-ram { display: flex; gap: 16px; align-items: center; font-family: var(--mono); font-size: 12px; }
+    .cpu-ram .label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .cpu-ram .value { color: var(--accent); min-width: 40px; }
 
     /* ---------- Chat Area ---------- */
     .chat-area {
-      grid-area: chat; overflow-y: auto; padding-right: 16px;
-      display: flex; flex-direction: column; gap: 12px;
+      grid-area: chat; overflow-y: auto; padding-right: 8px; display: flex;
+      flex-direction: column; gap: 12px; isolation: isolate;
     }
 
     .message {
-      display: flex; gap: 12px; max-width: 90%;
-      animation: message-in 0.3s ease-out;
+      display: flex; gap: 10px; max-width: 92%; font-size: 14px;
+      animation: fade-in 0.2s ease-out;
     }
-    @keyframes message-in { from { opacity: 0; transform: translateY(8px); } }
+    @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } }
 
     .message.user { justify-content: flex-end; }
     .message.assistant { justify-content: flex-start; }
 
     .message-avatar {
-      width: 40px; height: 40px; border-radius: 20px;
+      width: 32px; height: 32px; border-radius: 16px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 600; flex-shrink: 0;
+      font-size: 12px; font-weight: 600; flex-shrink: 0;
+      background: var(--card); color: var(--muted);
     }
-    .message-avatar.user { background: var(--accent-cyan); color: var(--bg); }
-    .message-avatar.assistant { background: var(--card); color: var(--muted); }
+    .message-avatar.user { background: var(--accent); color: var(--bg); }
 
     .message-bubble {
-      max-width: 75%; padding: 14px 18px; border-radius: 20px;
-      line-height: 1.4; font-size: 14px;
+      padding: 12px 14px; border-radius: 18px; line-height: 1.4;
+      background: var(--card); border: 1px solid var(--border);
+      flex: 1; font-size: 14px;
     }
-    .message-bubble.user { background: var(--accent-cyan); color: var(--bg); margin-left: auto; }
-    .message-bubble.assistant { background: var(--card); color: var(--fg); border: 1px solid var(--border); }
+    .message-bubble.user {
+      background: var(--accent); color: var(--bg); margin-left: auto; border-color: transparent;
+    }
+    .message-bubble.assistant { background: var(--card); color: var(--fg); border-color: var(--border); }
 
-    .message-meta { font-size: 10px; color: var(--muted); margin-top: 4px; text-align: right; }
-    .message-meta.assistant { text-align: left; color: var(--muted); font-size: 11px; }
+    .message-meta {
+      font-size: 10px; color: var(--muted); margin-top: 4px; flex-shrink: 0;
+    }
+    .message-meta.user { text-align: right; color: var(--muted); }
+    .message-meta.assistant { color: var(--muted); }
 
     /* ---------- Quick Action Dock ---------- */
     .dock {
-      grid-area: dock; display: flex; flex-direction: column; gap: 12px;
-      align-items: stretch; padding: 20px; background: var(--glass);
-      border-radius: 24px; border: 1px solid var(--border);
-      backdrop-filter: blur(12px);
+      grid-area: actions; display: flex; flex-direction: column; gap: 10px;
+      align-items: stretch; padding: 20px; background: var(--card);
+      border-radius: 20px; border: 1px solid var(--border); backdrop-filter: blur(8px);
     }
-    .dock .title { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
-    .dock .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+    .dock .title {
+      font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px;
+    }
+    .dock .actions { width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px; }
     .action-btn {
-      padding: 14px; border-radius: 16px; border: none; cursor: pointer;
-      font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500;
-      transition: all 0.2s ease; position: relative; overflow: hidden;
+      padding: 10px 12px; border: none; border-radius: 14px; cursor: pointer;
+      font-family: inherit; font-size: 12px; font-weight: 500; transition: all 0.18s ease;
+      background: var(--bg-tertiary); color: var(--fg);
     }
-    .action-btn::before { content: ""; position: absolute; inset: 0; border-radius: 16px; opacity: 0; transition: opacity 0.2s; }
-    .action-btn:hover { transform: translateY(-2px); box-shadow: var(--glow-cyan); }
-    .action-btn:hover::before { opacity: 0.2; }
-    .action-btn.cyan { background: rgba(0, 255, 204, 0.1); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); }
-    .action-btn.cyan:hover { box-shadow: var(--glow-cyan); }
-    .action-btn.purple { background: rgba(189, 19, 254, 0.1); border: 1px solid var(--accent-purple); color: var(--accent-purple); }
-    .action-btn.purple:hover { box-shadow: var(--glow-purple); }
-    .action-btn.terminal { background: rgba(34, 139, 34, 0.1); border: 1px solid #228B22; color: #228B22; }
-    .action-btn.terminal:hover { box-shadow: 0 0 20px #228B22; }
-    .action-btn.mute { background: rgba(255, 175, 50, 0.1); border: 1px solid var(--warning); color: var(--warning); }
+    .action-btn:hover { background: var(--accent); color: var(--bg); transform: translateY(-1px); }
+    .action-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
     /* ---------- Input Bar ---------- */
     .input-bar {
       grid-area: input; display: flex; gap: 12px; align-items: center;
-      padding: 20px; background: var(--glass); border-radius: 24px;
-      border: 1px solid var(--border); backdrop-filter: blur(12px);
-      transition: all 0.3s ease;
+      padding: 16px 20px; background: var(--bg-secondary); border-radius: 20px;
+      border: 1px solid var(--border); backdrop-filter: blur(8px);
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
-    .input-bar.expanded { gap: 16px; }
-    .input-bar:focus-within { border-color: var(--accent-cyan); box-shadow: var(--glow-cyan); }
+    .input-bar.expanded { gap: 8px; }
+    .input-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 24px rgba(0, 212, 170, 0.2); }
     .input-field {
-      flex: 1; padding: 14px 20px; background: var(--bg-secondary);
-      border: 1px solid var(--border); border-radius: 16px;
-      color: var(--fg); font-family: 'JetBrains Mono', monospace;
-      font-size: 14px; font-weight: 500; resize: none; outline: none;
-      transition: border-color 0.2s ease;
+      flex: 1; padding: 10px 14px; background: var(--bg-tertiary); border: none;
+      border-radius: 16px; color: var(--fg); font-size: 14px; font-family: var(--mono);
+      resize: none; outline: none; transition: background 0.15s;
     }
-    .input-field:focus { border-color: var(--accent-cyan); }
+    .input-field:focus { background: var(--bg-tertiary); }
     .input-field::placeholder { color: var(--muted); }
     .send-btn {
-      padding: 0 32px; background: var(--accent-cyan); color: var(--bg);
-      border: none; border-radius: 20px; font-weight: 600; font-size: 13px;
-      cursor: pointer; transition: all 0.2s ease; box-shadow: var(--glow-cyan);
+      padding: 0 20px; background: var(--accent); color: var(--bg);
+      border: none; border-radius: 16px; font-weight: 600; font-size: 13px;
+      cursor: pointer; min-width: 72px; transition: background 0.15s, transform 0.1s;
     }
-    .send-btn:hover { background: #00e5bb; transform: translateY(-1px); box-shadow: 0 4px 24px rgba(0, 255, 204, 0.3); }
+    .send-btn:hover { background: #00e5bb; transform: translateY(-1px); }
     .send-btn:focus-visible { outline: 2px solid var(--bg); outline-offset: 2px; }
 
-    /* Reduced mobile */
-    @media (max-width: 640px) {
+    /* ---------- Helpers ---------- */
+    .hide { display: none !important; }
+    .mono { font-family: var(--mono); }
+
+    @media (max-width: 600px) {
       .main { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; gap: 16px; }
-      .header-top { flex-direction: column; gap: 12px; }
-      .dock { order: 3; width: 100%; }
+      .header-top { flex-direction: column; gap: 8px; }
+      .dock { width: 100%; order: 3; }
       .input-bar { order: 4; }
     }
   </style>
 </head>
 <body>
-  <div class="bg-layer"></div>
-  <div class="grid-overlay"></div>
+  <div style="position:fixed;inset:0;pointer-events:none;background:
+    radial-gradient(ellipse 100% 60% at 20% 20%, rgba(0,212,170,0.08), transparent 50%),
+    radial-gradient(ellipse 80% 50% at 80% 80%, rgba(189,19,254,0.06), transparent 50%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-secondary) 100%); z-index:-1;"></div>
 
   <div class="main">
-    <!-- ============ HEADER ============ -->
+    <!-- ========= HEADER ========= -->
     <header class="header">
       <div class="header-top">
         <div class="status-bar">
           <div class="status-badge disconnected" id="status-badge">DISCONNECTED</div>
           <div class="status-dot disconnected" id="status-dot"></div>
-          <div class="status-text">Disconnected</div>
+          <span class="status-text">Disconnected</span>
         </div>
         <div class="cpu-ram" id="cpu-ram">
-          <span class="label">CPU</span><span class="value" id="cpu-value">--</span>%
-          <span class="label">RAM</span><span class="value" id="mem-value">--</span>%
+          <span class="label">CPU</span><span class="value" id="cpu-val">--</span>%
+          <span class="label">RAM</span><span class="value" id="mem-val">--</span>%
         </div>
       </div>
     </header>
 
-    <!-- ============ CHAT AREA ============ -->
+    <!-- ========= CHAT AREA ========= -->
     <div class="chat-area" id="chat-area">
       <div class="message assistant">
         <div class="message-avatar assistant">BUT</div>
@@ -251,54 +225,44 @@
       </div>
     </div>
 
-    <!-- ============ QUICK ACTION DOCK ============ -->
+    <!-- ========= QUICK ACTION DOCK ========= -->
     <div class="dock">
       <div class="title">Quick Actions</div>
       <div class="actions">
-        <!-- YouTube -->
-        <button class="action-btn cyan" onclick="executeAction('open_youtube')">YouTube</button>
-        <!-- Terminal -->
-        <button class="action-btn terminal" onclick="executeAction('open_terminal')">Terminal</button>
-        <!-- System Check -->
-        <button class="action-btn cyan" onclick="executeAction('system_check')">System Check</button>
-        <!-- Finder -->
-        <button class="action-btn cyan" onclick="executeAction('open_finder')">Finder</button>
-        <!-- Mute/Unmute -->
-        <button class="action-btn mute" onclick="executeAction('toggle_mute')">Mute/Unmute</button>
+        <button class="action-btn" onclick="sendCmd('open youtube')">YouTube</button>
+        <button class="action-btn" onclick="sendCmd('open terminal')">Terminal</button>
+        <button class="action-btn" onclick="sendCmd('system check')">System</button>
+        <button class="action-btn" onclick="sendCmd('open finder')">Finder</button>
+        <button class="action-btn" onclick="sendCmd('mute volume')">Mute</button>
       </div>
     </div>
 
-    <!-- ============ INPUT BAR ============ -->
+    <!-- ========= INPUT BAR ========= -->
     <div class="input-bar" id="input-bar">
-      <textarea class="input-field" id="command-input" placeholder="Type a command..." rows="1" spellcheck="false"></textarea>
+      <input class="input-field" id="command-input" placeholder="Type a command…" autocomplete="off">
       <button class="send-btn" id="send-btn">Send</button>
     </div>
-  </div>
+  </main>
 
-  <!-- ============ Socket.IO ============ -->
+  <!-- Socket.IO client -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-
   <script>
-    /* ---------- Socket.IO Connection ---------- */
+    /* ---------- Socket.IO ---------- */
     const socket = io("http://127.0.0.1:5000", {
       transports: ["websocket", "polling"],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
-      timeout: 10000
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000
     });
 
     /* ---------- DOM Elements ---------- */
     const statusBadge = document.getElementById("status-badge");
-    const statusDot = document.getElementById("status-dot");
-    const statusText = statusBadge ? statusBadge.querySelector(".status-text") : null;
-    const cpuValue = document.getElementById("cpu-value");
-    const memValue = document.getElementById("mem-value");
+    const cpuVal = document.getElementById("cpu-val");
+    const memVal = document.getElementById("mem-val");
     const chatArea = document.getElementById("chat-area");
-    const commandInput = document.getElementById("command-input");
+    const cmdInput = document.getElementById("command-input");
     const sendBtn = document.getElementById("send-btn");
-    const inputBar = document.getElementById("input-bar");
 
-    /* ---------- Connection State ---------- */
+    /* ---------- State ---------- */
     let isConnected = false;
 
     /* ---------- On Connect ---------- */
@@ -306,9 +270,7 @@
       isConnected = true;
       statusBadge.className = "status-badge connected";
       statusBadge.textContent = "CONNECTED";
-      statusDot.className = "status-dot connected";
-      statusText.textContent = "Connected";
-      updateCpuRam();
+      updateHealth();
     });
 
     /* ---------- On Disconnect ---------- */
@@ -316,27 +278,25 @@
       isConnected = false;
       statusBadge.className = "status-badge disconnected";
       statusBadge.textContent = "DISCONNECTED";
-      statusDot.className = "status-dot disconnected";
-      statusText.textContent = "DISCONNECTED";
     });
 
-    /* ---------- System Health Polling ---------- */
-    function updateCpuRam() {
+    /* ---------- Health Pulse (CPU/RAM) ---------- */
+    function updateHealth() {
       socket.emit("system_check", {});
-      setTimeout(updateCpuRam, 8000);
+      setTimeout(updateHealth, 3000);
     }
 
-    /* ---------- Render Messages ---------- */
+    /* ---------- Render Message ---------- */
     function addMessage(text, isUser = false) {
       const div = document.createElement("div");
       div.className = `message ${isUser ? "user" : "assistant"}`;
 
-      const avatarClass = isUser ? "user" : "assistant";
-      const bubbleClass = isUser ? "message-bubble user" : "message-bubble assistant";
+      const avatar = isUser ? "U" : "B";
+      const bubbleCls = isUser ? "message-bubble user" : "message-bubble assistant";
 
       div.innerHTML = `
-        <div class="message-avatar ${avatarClass}">${isUser ? "U" : "B"}</div>
-        <div class="message-bubble ${bubbleClass}">
+        <div class="message-avatar ${isUser ? "user" : "assistant"}">${avatar}</div>
+        <div class="message-bubble ${bubbleCls}">
           ${escapeHtml(text)}
         </div>
         <div class="message-meta ${isUser ? "message-meta user" : "message-meta assistant"}">
@@ -348,75 +308,44 @@
       chatArea.scrollTop = chatArea.scrollHeight;
     }
 
-    function escapeHtml(text) {
-      const div = document.createElement("div");
-      div.textContent = text;
-      return div.innerHTML;
+    function escapeHtml(t) {
+      const d = document.createElement("div"); d.textContent = t; return d.innerHTML;
     }
+    function formatTime() { return new Date().toLocaleTimeString([], {minute:"2-digit",second:"2-digit"}); }
 
-    function formatTime() {
-      return new Date().toLocaleTimeString([], { minute: "2-digit", second: "2-digit" });
-    }
-
-    /* ---------- Handle command_result ---------- */
+    /* ---------- command_result ---------- */
     socket.on("command_result", (data) => {
-      const msg = data.message || data.status || "Command processed";
+      const msg = data.message || "Command processed";
       addMessage(msg, true);
     });
 
-    /* ---------- Handle system_check ---------- */
+    /* ---------- system_check_response ---------- */
     socket.on("system_check_response", (data) => {
-      if (data.cpu !== undefined) cpuValue.textContent = data.cpu;
-      if (data.memory !== undefined) memValue.textContent = data.memory;
+      if (cpuVal !== undefined) cpuVal.textContent = data.cpu || "--";
+      if (memVal !== undefined) memVal.textContent = data.memory || "--";
     });
 
     /* ---------- Send Command ---------- */
-    function sendCommand() {
-      const text = commandInput.value.trim();
-      if (!text) return;
+    function sendCmd(text) {
+      const trimmed = (text || "").trim();
+      if (!trimmed) return;
 
-      // Add user message to chat immediately
-      addMessage(text, true);
+      // Append immediately to UI
+      addMessage(trimmed, true);
 
-      // Emit send_command with the command text
-      socket.emit("send_command", { text });
+      // Emit to backend
+      socket.emit("send_command", { text: trimmed });
 
       // Clear input
-      commandInput.value = "";
-      inputBar.classList.remove("expanded");
+      cmdInput.value = "";
     }
 
-    /* ---------- Enter Key Submission ---------- */
-    commandInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        sendCommand();
-      }
+    /* ---------- Enter key ---------- */
+    cmdInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { sendCmd(cmdInput.value); }
     });
 
-    /* ---------- Quick Action Dock ---------- */
-    function executeAction(action) {
-      // Visual feedback
-      sendBtn.disabled = true;
-      sendBtn.style.opacity = "0.5";
-
-      // Map actions to backend commands
-      const actions = {
-        open_youtube: "open youtube",
-        open_terminal: "open terminal",
-        system_check: "system info",
-        open_finder: "open finder",
-        toggle_mute: "set volume 0"
-      };
-
-      const cmd = actions[action] || action;
-      socket.emit("send_command", { text: cmd }, (response) => {
-        sendBtn.disabled = false;
-        sendBtn.style.opacity = "1";
-        // Response already handled via socket.on('command_result')
-      });
-    }
-
-    /* ---------- Initial System Check ---------- */
+    /* ---------- Initial health fetch ---------- */
     socket.emit("system_check", {});
   </script>
 </body>
