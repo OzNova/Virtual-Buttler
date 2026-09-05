@@ -2,3 +2,4 @@ flask
 flask-cors
 pyttsx3
 psutil
+python-dotenv

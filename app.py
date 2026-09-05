@@ -22,6 +22,12 @@ import webbrowser
 import urllib.request
 import urllib.error
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+except Exception:
+    pass
+
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
@@ -33,6 +39,8 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 # Gemini LLM (natural chat fallback when no system command matches)
 # ---------------------------------------------------------------------------
 
+# Reads GEMINI_API_KEY from the environment. Set it in a local .env file
+# (git-ignored) or export it in the shell — never hardcode it in source.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 # NOTE: gemini-2.5-flash is decommissioned for new accounts (HTTP 404). The
 # working replacement on this key is gemini-3.6-flash.
