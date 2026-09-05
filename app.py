@@ -1,10 +1,6 @@
 """Virtual Butler — macOS AI Assistant Backend.
 
-Flask + SocketIO server with clean, robust system integration:
-- Open apps, websites, manage volume, report system specs
-- Conversational AI fallback
-- Real-time telemetry (CPU/RAM) every 3 seconds
-- Reliable send_command / command_result pipeline
+Flask + SocketIO server with clean, robust system integration.
 """
 
 import os
@@ -51,16 +47,10 @@ def open_app(name: str) -> str:
         subprocess.run(["open", "-a", name], check=True, capture_output=True)
         return f"Opened application: {name}"
     except Exception:
-        # Fallback: try as URL
         if name.startswith(("http://", "https://")):
             webbrowser.open(name)
             return f"Opened website: {name}"
         return f"Could not open: {name}"
-
-
-def open_website(url: str) -> str:
-    webbrowser.open(url)
-    return f"Opening website: {url}"
 
 
 def set_volume_muted(muted: bool) -> str:
@@ -69,10 +59,9 @@ def set_volume_muted(muted: bool) -> str:
     try:
         subprocess.run(
             ["osascript", "-e", f"set volume output muted {state}"],
-            check=True,
-            capture_output=True,
+            check=True, capture_output=True,
         )
-        return f"Volume muted: {muted}"
+        return "Audio muted." if muted else "Audio unmuted."
     except Exception as e:
         return f"Volume toggle failed: {e}"
 
@@ -92,20 +81,6 @@ def get_system_info():
         return {"cpu": 0, "memory": 0, "error": str(e)}
 
 
-def conversational_response(text: str) -> str:
-    """Simple fallback assistant responses."""
-    t = text.lower().strip()
-    if any(w in t for w in ["hello", "hi", "hey"]):
-        return "Hello sir! Virtual Butler is online. How may I help?"
-    if any(w in t for w in ["thank", "thanks"]):
-        return "You're very welcome, sir!"
-    if any(w in t for w in ["time", "what time"]):
-        return f"The time is {time.strftime('%I:%M %p')}."
-    if any(w in t for w in ["how are you", "status"]):
-        return "All systems nominal, sir. CPU and RAM running within normal ranges."
-    return "I'm not sure I understand, sir. Could you rephrase?"
-
-
 # ---------------------------------------------------------------------------
 # Socket.IO Event Routing
 # ---------------------------------------------------------------------------
@@ -113,12 +88,7 @@ def conversational_response(text: str) -> str:
 @socketio.on("connect")
 def handle_connect():
     print("[BACKEND] Client connected.", flush=True)
-    emit("status_update", {
-        "state": "CONNECTED",
-        "cpu": 0,
-        "memory": 0,
-        "model": "big-pickle"
-    })
+    emit("status_update", {"state": "CONNECTED", "cpu": 0, "memory": 0, "model": "big-pickle"})
 
 
 @socketio.on("disconnect")
@@ -139,43 +109,49 @@ def handle_voice_stop():
 @socketio.on("send_command")
 def handle_send_command(data):
     """Parse and route incoming commands. Always emit command_result."""
-    command_text = data.get("command", "").lower() if data else ""
+    cmd = data.get("command", "").strip().lower() if data else ""
     print(f"[RECV COMMAND]: {data}", flush=True)
 
-    if not command_text:
+    if not cmd:
         emit("command_result", {"status": "info", "message": "No command received."})
         return
 
     # ── Open YouTube ───────────────────────────────────────────────────────
-    if "open youtube" in command_text:
+    if "open youtube" in cmd:
         webbrowser.open("https://youtube.com")
-        emit("command_result", {"status": "success", "message": "Opening YouTube..."})
+        msg = "Opening YouTube..."
+        emit("command_result", {"status": "success", "message": msg})
         return
 
     # ── Open Terminal ──────────────────────────────────────────────────────
-    if "open terminal" in command_text:
+    if "open terminal" in cmd:
         subprocess.run(["open", "-a", "Terminal"])
-        emit("command_result", {"status": "success", "message": "Opening Terminal..."})
+        msg = "Opening Terminal..."
+        emit("command_result", {"status": "success", "message": msg})
         return
 
     # ── Open Finder ────────────────────────────────────────────────────────
-    if "open finder" in command_text:
+    if "open finder" in cmd:
         subprocess.run(["open", "-a", "Finder"])
-        emit("command_result", {"status": "success", "message": "Opening Finder..."})
+        msg = "Opening Finder..."
+        emit("command_result", {"status": "success", "message": msg})
         return
 
     # ── Mute / Unmute ──────────────────────────────────────────────────────
-    if "mute" in command_text:
+    if "mute" in cmd:
         subprocess.run(["osascript", "-e", "set volume output muted true"])
-        emit("command_result", {"status": "success", "message": "Muted system audio."})
+        msg = "Audio muted."
+        emit("command_result", {"status": "success", "message": msg})
         return
-    if "unmute" in command_text:
+    if "unmute" in cmd:
         subprocess.run(["osascript", "-e", "set volume output muted false"])
-        emit("command_result", {"status": "success", "message": "Unmuted system audio."})
+        msg = "Audio unmuted."
+        emit("command_result", {"status": "success", "message": msg})
         return
 
-    # ── Conversational Fallback ────────────────────────────────────────────
-    emit("command_result", {"status": "success", "message": "I processed your request, sir."})
+    # ── Default fallback ───────────────────────────────────────────────────
+    msg = f"Command received: {cmd}"
+    emit("command_result", {"status": "success", "message": msg})
 
 
 # ---------------------------------------------------------------------------
