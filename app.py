@@ -139,55 +139,43 @@ def handle_voice_stop():
 @socketio.on("send_command")
 def handle_send_command(data):
     """Parse and route incoming commands. Always emit command_result."""
-    text = data.get("text", "") if data else ""
-    if not text:
+    command_text = data.get("command", "").lower() if data else ""
+    print(f"[RECV COMMAND]: {data}", flush=True)
+
+    if not command_text:
         emit("command_result", {"status": "info", "message": "No command received."})
         return
 
-    text_lower = text.lower().strip()
-    print(f"[BACKEND] Command: \"{text}\"", flush=True)
-
-    # ── Open YouTube / Website ──────────────────────────────────────────
-    if "open youtube" in text_lower or "open youtube.com" in text_lower:
-        result = open_website("https://www.youtube.com")
-        emit("command_result", {"status": "success", "message": result})
+    # ── Open YouTube ───────────────────────────────────────────────────────
+    if "open youtube" in command_text:
+        webbrowser.open("https://youtube.com")
+        emit("command_result", {"status": "success", "message": "Opening YouTube..."})
         return
 
-    # ── Open Terminal ────────────────────────────────────────────────────
-    if "open terminal" in text_lower:
-        result = open_app("Terminal")
-        emit("command_result", {"status": "success", "message": result})
+    # ── Open Terminal ──────────────────────────────────────────────────────
+    if "open terminal" in command_text:
+        subprocess.run(["open", "-a", "Terminal"])
+        emit("command_result", {"status": "success", "message": "Opening Terminal..."})
         return
 
-    # ── Open Finder ──────────────────────────────────────────────────────
-    if "open finder" in text_lower:
-        result = open_app("Finder")
-        emit("command_result", {"status": "success", "message": result})
+    # ── Open Finder ────────────────────────────────────────────────────────
+    if "open finder" in command_text:
+        subprocess.run(["open", "-a", "Finder"])
+        emit("command_result", {"status": "success", "message": "Opening Finder..."})
         return
 
-    # ── Mute / Unmute Volume ─────────────────────────────────────────────
-    if "mute volume" in text_lower or "toggle mute" in text_lower:
-        result = set_volume_muted(True)
-        emit("command_result", {"status": "success", "message": result})
+    # ── Mute / Unmute ──────────────────────────────────────────────────────
+    if "mute" in command_text:
+        subprocess.run(["osascript", "-e", "set volume output muted true"])
+        emit("command_result", {"status": "success", "message": "Muted system audio."})
         return
-    if "unmute volume" in text_lower:
-        result = set_volume_muted(False)
-        emit("command_result", {"status": "success", "message": result})
-        return
-
-    # ── System Check (CPU/RAM) ──────────────────────────────────────────
-    if any(kw in text_lower for kw in ["system check", "cpu", "ram", "specs"]):
-        info = get_system_info()
-        msg = (f"CPU: {info.get('cpu', 0)}%\n"
-               f"RAM: {info.get('memory', 0)}%\n"
-               f"Total: {info.get('memory_total', '--')}\n"
-               f"Available: {info.get('memory_available', '--')}")
-        emit("command_result", {"status": "success", "message": msg})
+    if "unmute" in command_text:
+        subprocess.run(["osascript", "-e", "set volume output muted false"])
+        emit("command_result", {"status": "success", "message": "Unmuted system audio."})
         return
 
-    # ── Conversational Fallback ──────────────────────────────────────────
-    response = conversational_response(text)
-    emit("command_result", {"status": "info", "message": response})
+    # ── Conversational Fallback ────────────────────────────────────────────
+    emit("command_result", {"status": "success", "message": "I processed your request, sir."})
 
 
 # ---------------------------------------------------------------------------

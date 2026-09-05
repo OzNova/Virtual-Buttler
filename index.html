@@ -105,38 +105,24 @@
       flex-direction: column; gap: 12px; isolation: isolate;
     }
 
-    .message {
-      display: flex; gap: 10px; max-width: 92%; font-size: 14px;
-      animation: fade-in 0.2s ease-out;
+    /* ---------- Message Bubbles (NOT full width) ---------- */
+    .user-message {
+      max-width: 70%; width: fit-content; display: inline-block; clear: both;
+      background: var(--accent); color: var(--bg); padding: 10px 14px;
+      border-radius: 18px; margin-left: auto; font-size: 14px;
     }
-    @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } }
+    .assistant-message {
+      max-width: 70%; width: fit-content; display: inline-block; clear: both;
+      background: var(--card); color: var(--fg); padding: 10px 14px;
+      border: 1px solid var(--border); border-radius: 18px; font-size: 14px;
+    }
+    .user-message { text-align: right; }
+    .assistant-message { text-align: left; }
 
-    .message.user { justify-content: flex-end; }
-    .message.assistant { justify-content: flex-start; }
+    .message { display: none; }
+    .user-message, .assistant-message { display: block; }
 
-    .message-avatar {
-      width: 32px; height: 32px; border-radius: 16px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 600; flex-shrink: 0;
-      background: var(--card); color: var(--muted);
-    }
-    .message-avatar.user { background: var(--accent); color: var(--bg); }
-
-    .message-bubble {
-      padding: 12px 14px; border-radius: 18px; line-height: 1.4;
-      background: var(--card); border: 1px solid var(--border);
-      flex: 1; font-size: 14px;
-    }
-    .message-bubble.user {
-      background: var(--accent); color: var(--bg); margin-left: auto; border-color: transparent;
-    }
-    .message-bubble.assistant { background: var(--card); color: var(--fg); border-color: var(--border); }
-
-    .message-meta {
-      font-size: 10px; color: var(--muted); margin-top: 4px; flex-shrink: 0;
-    }
-    .message-meta.user { text-align: right; color: var(--muted); }
-    .message-meta.assistant { color: var(--muted); }
+    .message-avatar { display: none; }
 
     /* ---------- Quick Action Dock ---------- */
     .dock {
@@ -289,20 +275,9 @@
     /* ---------- Render Message ---------- */
     function addMessage(text, isUser = false) {
       const div = document.createElement("div");
-      div.className = `message ${isUser ? "user" : "assistant"}`;
+      div.className = isUser ? "user-message" : "assistant-message";
 
-      const avatar = isUser ? "U" : "B";
-      const bubbleCls = isUser ? "message-bubble user" : "message-bubble assistant";
-
-      div.innerHTML = `
-        <div class="message-avatar ${isUser ? "user" : "assistant"}">${avatar}</div>
-        <div class="message-bubble ${bubbleCls}">
-          ${escapeHtml(text)}
-        </div>
-        <div class="message-meta ${isUser ? "message-meta user" : "message-meta assistant"}">
-          ${isUser ? "Just now" : formatTime()}
-        </div>
-      `;
+      div.innerHTML = escapeHtml(text);
 
       chatArea.appendChild(div);
       chatArea.scrollTop = chatArea.scrollHeight;
