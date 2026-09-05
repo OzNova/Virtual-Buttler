@@ -5,304 +5,429 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>JARVIS AI</title>
   <style>
-    /* ---------- Design System: Dark / Glassmorphism ---------- */
     :root {
-      --bg: #08080c;
-      --bg-secondary: #12131c;
-      --bg-tertiary: #1a1b21;
-      --fg: #e8e8f0;
-      --muted: #5a5a6e;
+      --bg: #05060a;
+      --bg-secondary: #0d0f17;
+      --bg-tertiary: #161a26;
+      --card: radial-gradient(circle at 20% 0%, #111423, #0b0d16 70%);
+      --fg: #e8eaf3;
+      --muted: #6b7288;
       --accent: #00ffcc;
-      --card: #161a1f;
-      --border: rgba(0, 255, 204, 0.1);
-      --glass: rgba(8, 8, 12, 0.7);
-      --glow-connected: rgba(0, 255, 204, 0.3);
-      --glow-disconnected: rgba(255, 55, 55, 0.3);
+      --accent-2: #7aa2ff;
+      --border: rgba(255,255,255,0.06);
+      --border-glow: rgba(0,255,204,0.25);
+      --danger: #ff4d6d;
+      --radius: 18px;
     }
 
-    * {
-      margin: 0; padding: 0; box-sizing: border-box;
-    }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     html { height: 100%; -webkit-tap-highlight-color: transparent; }
 
     body {
       min-height: 100%;
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(0,255,204,0.12), transparent 60%),
+        radial-gradient(900px 500px at -10% 110%, rgba(122,162,255,0.10), transparent 60%),
+        var(--bg);
       color: var(--fg);
       line-height: 1.5;
       -webkit-font-smoothing: antialiased;
-      overflow-x: hidden;
+      padding: 20px;
     }
 
-    .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
-
-    /* ---------- Page Background & Glass Panel ---------- */
-    .page-bg {
-      position: fixed; inset: 0; pointer-events: none;
-      background: var(--bg);
-      z-index: -1;
-    }
-
-    .glass-panel {
-      position: relative; z-index: 1;
-      max-width: 900px; margin: 24px auto auto auto; padding: 32px 24px 48px;
-      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      border-radius: 24px; border: 1px solid var(--border);
-      background: var(--card); min-height: 90vh; display: flex; flex-direction: column;
+    /* ---------- Main Panel ---------- */
+    .panel {
+      width: 100%;
+      max-width: 860px;
+      height: min(92vh, 860px);
+      display: flex;
+      flex-direction: column;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow:
+        0 30px 80px rgba(0,0,0,0.55),
+        inset 0 1px 0 rgba(255,255,255,0.04);
+      backdrop-filter: blur(24px);
     }
 
     /* ---------- Header ---------- */
     .header {
-      display: flex; justify-content: space-between; align-items: center; padding: 12px 20px;
-      background: var(--bg-secondary); border-radius: 16px 16px 0 0; border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
     }
-
-    .header-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
-    .badge {
-      padding: 6px 12px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3em;
-      transition: all 0.2s; border: 1px solid var(--border);
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-icon {
+      width: 38px; height: 38px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #031; font-weight: 800; font-size: 16px;
+      box-shadow: 0 0 24px var(--border-glow);
     }
-    .badge.ready { background: rgba(0, 255, 204, 0.12); color: var(--accent); border-color: var(--accent); box-shadow: 0 0 16px var(--glow-connected); }
-    .badge.offline { background: rgba(255, 55, 55, 0.12); color: #ff3e3e; border-color: #ff3e3e; box-shadow: 0 0 16px rgba(255,55,55,0.3); }
+    .brand-text { display: flex; flex-direction: column; }
+    .brand-text h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
+    .brand-text span { font-size: 11px; color: var(--muted); letter-spacing: 1px; }
 
-    /* ---------- Chat Container ---------- */
-    .chat-container { flex: 1; overflow-y: auto; padding: 24px 20px 20px; }
-
-    .message {
-      display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; font-size: 14px; word-break: break-word;
+    .status { display: flex; align-items: center; gap: 8px; }
+    .status-dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--danger); box-shadow: 0 0 12px var(--danger);
+      transition: all 0.3s;
     }
-    .message.user { justify-content: flex-end; }
-    .message.assistant { justify-content: flex-start; }
+    .status.online .status-dot { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+    .status-label { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); }
+    .status.online .status-label { color: var(--accent); }
+
+    /* ---------- Chat ---------- */
+    .chat { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+
+    .msg { display: flex; gap: 10px; align-items: flex-end; }
+    .msg.user { justify-content: flex-end; }
+    .msg.assistant { justify-content: flex-start; }
 
     .avatar {
-      width: 28px; height: 28px; border-radius: 10px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600;
+      width: 30px; height: 30px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
     }
-    .avatar.user { background: var(--accent); color: var(--bg); }
-    .avatar.assistant { background: var(--card); color: var(--muted); }
+    .msg.assistant .avatar { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #031; }
+    .msg.user .avatar { background: var(--bg-tertiary); color: var(--muted); }
 
     .bubble {
-      max-width: 65%; width: fit-content; padding: 10px 14px; border-radius: 18px 12px 12px 18px;
-      font-size: 13px; line-height: 1.4; word-break: break-word; font-weight: 500;
+      max-width: 72%; padding: 11px 15px;
+      font-size: 13.5px; line-height: 1.45; font-weight: 400;
+      word-break: break-word; white-space: pre-wrap;
     }
-    .bubble.user { background: var(--accent); color: var(--bg); margin-left: auto; }
-    .bubble.assistant { background: rgba(255,255,255,0.04); color: var(--fg); border: 1px solid var(--border); border-radius: 12px 18px 18px 12px; }
-
-    .meta { font-size: 10px; color: var(--muted); margin-top: 4px; }
-
-    /* ---------- Quick Actions Dock ---------- */
-    .actions-dock {
-      padding: 20px 24px; background: var(--bg-secondary); border-radius: 0 0 24px 24px; border-top: 1px solid var(--border);
+    .msg.assistant .bubble {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 4px 16px 16px 16px;
+      color: var(--fg);
     }
-    .actions-dock .title { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 12px; }
-    .actions-dock .btn {
-      padding: 8px 14px; border: none; border-radius: 10px; cursor: pointer;
-      font-family: inherit; font-size: 12px; font-weight: 500; transition: background 0.15s;
+    .msg.user .bubble {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #02120e;
+      border-radius: 16px 4px 16px 16px;
+      font-weight: 600;
+    }
+
+    .typing { display: inline-flex; gap: 4px; padding: 4px 2px; }
+    .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+    .typing i:nth-child(2) { animation-delay: 0.2s; }
+    .typing i:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%,80%,100% { opacity: 0.3; } 40% { opacity: 1; } }
+
+    /* ---------- Quick Actions ---------- */
+    .dock {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.015);
+    }
+    .dock-title { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; }
+    .dock-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      padding: 7px 13px; font-size: 12px; cursor: pointer; font-weight: 500;
       background: var(--bg-tertiary); color: var(--fg);
+      border: 1px solid var(--border); border-radius: 999px;
+      transition: all 0.18s; font-family: inherit;
     }
-    .actions-dock .btn:hover { background: var(--accent); color: var(--bg); }
-    .actions-dock .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .chip:hover { background: var(--accent); color: #031; border-color: var(--accent); box-shadow: 0 0 16px var(--border-glow); }
 
     /* ---------- Input Bar ---------- */
-    .input-bar { padding: 16px 20px; background: var(--bg-secondary); border-radius: 20px; border: 1px solid var(--border); }
-    .input-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 24px var(--glow-connected); }
-    .input-bar input { flex: 1; padding: 10px 14px; background: var(--bg-tertiary); border: none; border-radius: 14px; color: var(--fg); font-size: 13px; font-family: var(--mono); resize: none; outline: none; }
-    .input-bar input:focus { background: var(--bg-tertiary); }
+    .input-bar {
+      display: flex; gap: 10px; align-items: center;
+      padding: 16px 24px;
+      background: rgba(255,255,255,0.02);
+    }
+    .input-bar input {
+      flex: 1; padding: 12px 16px;
+      background: var(--bg-tertiary); color: var(--fg);
+      border: 1px solid var(--border); border-radius: 14px;
+      font-size: 13.5px; font-family: inherit; outline: none;
+      transition: border 0.2s, box-shadow 0.2s;
+    }
+    .input-bar input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--border-glow); }
     .input-bar input::placeholder { color: var(--muted); }
-    .input-bar .btn { padding: 0 20px; background: var(--accent); color: var(--bg); border: none; border-radius: 14px; font-weight: 600; font-size: 13px; cursor: pointer; min-width: 72px; }
 
-    @media (max-width: 600px) {
-      .glass-panel { padding: 16px; min-height: auto; }
-      .header { padding: 10px 16px; border-radius: 12px 12px 0 0; }
-      .actions-dock { padding: 12px 16px; border-radius: 0 0 16px 16px; }
-      .actions-dock .btn { padding: 6px 10px; font-size: 11px; }
-      .input-bar { padding: 10px 12px; }
-      .input-bar input { font-size: 12px; }
-      .input-bar .btn { min-width: 50px; font-size: 11px; }
+    .icon-btn {
+      width: 44px; height: 44px; flex-shrink: 0; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg-tertiary); color: var(--fg);
+      border: 1px solid var(--border); border-radius: 14px;
+      transition: all 0.18s;
+    }
+    .icon-btn:hover { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 16px var(--border-glow); }
+    .icon-btn.active { background: var(--danger); color: #fff; border-color: var(--danger); box-shadow: 0 0 18px rgba(255,77,109,0.4); }
+
+    .send-btn {
+      height: 44px; padding: 0 20px; flex-shrink: 0; cursor: pointer;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #02120e; border: none; border-radius: 14px;
+      font-weight: 700; font-size: 13px; transition: all 0.18s;
+    }
+    .send-btn:hover { filter: brightness(1.08); box-shadow: 0 0 20px var(--border-glow); }
+
+    .mic-hint { font-size: 10.5px; color: var(--muted); text-align: center; padding: 0 24px 6px; }
+
+    .chat::-webkit-scrollbar { width: 8px; }
+    .chat::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 8px; }
+    .chat::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    @media (max-width: 560px) {
+      body { padding: 10px; }
+      .panel { height: 96vh; border-radius: 20px; }
+      .bubble { max-width: 82%; }
+      .input-bar { padding: 12px; }
+      .send-btn { padding: 0 14px; }
+      .dock { padding: 12px; }
     }
   </style>
 </head>
 <body>
-  <div class="page-bg"></div>
-
-  <div class="glass-panel">
-    <!-- ========= HEADER ========= -->
-    <header class="header">
-      <span class="header-title">JARVIS AI</span>
-      <span class="badge ready" id="status-badge">SYSTEM READY</span>
-    </header>
-
-    <!-- ========= CHAT CONTAINER ========= -->
-    <div class="chat-container" id="chat-container">
-      <!-- Messages injected by JS -->
+  <div class="panel">
+    <!-- HEADER -->
+    <div class="header">
+      <div class="brand">
+        <div class="brand-icon">J</div>
+        <div class="brand-text">
+          <h1>JARVIS</h1>
+          <span>PERSONAL AI ASSISTANT</span>
+        </div>
+      </div>
+      <div class="status online" id="status">
+        <span class="status-dot"></span>
+        <span class="status-label">Ready</span>
+      </div>
     </div>
 
-    <!-- ========= QUICK ACTIONS DOCK ========= -->
-    <div class="actions-dock">
-      <span class="title">Quick Actions</span>
-      <div class="btn" onclick="sendQuickCommand('open youtube')">YouTube</div>
-      <div class="btn" onclick="sendQuickCommand('open terminal')">Terminal</div>
-      <div class="btn" onclick="sendQuickCommand('open finder')">Finder</div>
-      <div class="btn" onclick="sendQuickCommand('mute')">Mute</div>
-      <div class="btn" onclick="sendQuickCommand('unmute')">Unmute</div>
-      <div class="btn" onclick="sendQuickCommand('system check')">System Check</div>
+    <!-- CHAT -->
+    <div class="chat" id="chat">
+      <div class="msg assistant">
+        <div class="avatar">J</div>
+        <div class="bubble">System online. Welcome back, sir. How may I assist you?</div>
+      </div>
     </div>
+
+    <!-- QUICK ACTIONS -->
+    <div class="dock">
+      <div class="dock-title">Quick Actions</div>
+      <div class="dock-chips">
+        <button class="chip" data-cmd="open youtube">YouTube</button>
+        <button class="chip" data-cmd="open terminal">Terminal</button>
+        <button class="chip" data-cmd="open finder">Finder</button>
+        <button class="chip" data-cmd="open spotify">Spotify</button>
+        <button class="chip" data-cmd="mute">Mute</button>
+        <button class="chip" data-cmd="unmute">Unmute</button>
+        <button class="chip" data-cmd="system check">System Check</button>
+        <button class="chip" data-cmd="screenshot">Screenshot</button>
+      </div>
+    </div>
+
+    <!-- INPUT BAR -->
+    <div class="input-bar">
+      <button class="icon-btn" id="mic-btn" title="Voice input (hold/click to speak)" aria-label="Voice input">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+          <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
+          <line x1="12" y1="18" x2="12" y2="22"/>
+        </svg>
+      </button>
+      <input id="cmd-input" type="text" placeholder="Type a command, ask a question, or tap the mic…" autocomplete="off">
+      <button class="send-btn" id="send-btn">Send</button>
+    </div>
+    <div class="mic-hint" id="mic-hint"></div>
   </div>
 
-  <!-- Input Bar (fixed at bottom) -->
-  <div class="input-bar" id="input-bar">
-    <input id="cmd-input" type="text" placeholder="Type a command…" autocomplete="off">
-    <button class="btn" onclick="sendMsg()">Send</button>
-  </div>
-
-  <!-- Web Speech API for voice input -->
   <script>
-    /* ---------- Check if Web Speech API is supported ---------- */
-    const supportsSpeech = !!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
+    (function () {
+      "use strict";
 
-    /* ---------- Socket.IO is NOT used — native fetch() ---------- */
-    /* ---------- DOM Elements ---------- */
-    const chatContainer = document.getElementById("chat-container");
-    const cmdInput = document.getElementById("cmd-input");
-    const statusBadge = document.getElementById("status-badge");
+      // ---------- DOM ----------
+      var chat = document.getElementById("chat");
+      var cmdInput = document.getElementById("cmd-input");
+      var sendBtn = document.getElementById("send-btn");
+      var micBtn = document.getElementById("mic-btn");
+      var statusBox = document.getElementById("status");
+      var micHint = document.getElementById("mic-hint");
 
-    /* ---------- State ---------- */
-    let isConnected = true; /* Assume connected since the app starts up */
-    let recognition = null;
-
-    /* ---------- On DOM Content Loaded ---------- */
-    document.addEventListener("DOMContentLoaded", () => {
-      /* ---------- Initialize Voice Recognition ---------- */
-      if (supportsSpeech) {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        recognition = new SpeechRecognition();
+      // ---------- Voice (Web Speech API) ----------
+      var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      var recognition = SpeechRecognition ? new SpeechRecognition() : null;
+      var isListening = false;
+      if (recognition) {
         recognition.continuous = false;
         recognition.interimResults = false;
         recognition.lang = "en-US";
 
-        /* ---------- On Speech Result ---------- */
-        recognition.onresult = (event) => {
-          const transcript = event.results[0][0].transcript.trim();
+        recognition.onresult = function (event) {
+          var transcript = event.results[0][0].transcript.trim();
           cmdInput.value = transcript;
-          /* Auto-submit when speech finishes */
-          if (!e.key || e.key !== " ") {
-            sendMsg();
+          sendMsg();
+        };
+
+        recognition.onerror = function (event) {
+          setListening(false);
+          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            micHint.textContent = "Microphone access blocked — allow it in your browser.";
+          } else if (event.error === "no-speech") {
+            micHint.textContent = "I didn't catch that. Try again.";
+          } else {
+            micHint.textContent = "Voice error: " + event.error;
           }
         };
 
-        /* ---------- On Speech Error ---------- */
-        recognition.onerror = (event) => {
-          console.error("Speech recognition error:", event.error);
+        recognition.onend = function () {
+          setListening(false);
+          micHint.textContent = "";
         };
+      } else {
+        micHint.textContent = "Voice input not supported in this browser.";
       }
 
-      /* ---------- Click Microphone Button (if recognition available) ---------- */
-      const micBtn = document.createElement("button");
-      micBtn.style.display = "none"; /* Hidden - use the input bar button instead */
-      micBtn.innerHTML = "<svg width='20' height='20' fill='currentColor' viewBox='0 0 24 24'><path d='M12 3v11M8 15l4-3 4 3V3'/></svg>";
-      micBtn.title = "Click to speak";
-      document.querySelector(".actions-dock").appendChild(micBtn);
-
-      /* ---------- Click to Toggle Voice Listening ---------- */
-      let isListening = false;
-      micBtn.addEventListener("click", () => {
-        isListening = !isListening;
+      function setListening(state) {
+        isListening = state;
         if (isListening) {
-          recognition.start();
-          micBtn.innerHTML = "<svg width='20' height='20' fill='red' viewBox='0 0 24 24'><path d='M12 3v11M8 15l4-3 4 3V3'/></svg>";
+          micBtn.classList.add("active");
+          micHint.textContent = "Listening… speak now.";
         } else {
+          micBtn.classList.remove("active");
+          micHint.textContent = "";
+        }
+      }
+
+      micBtn.addEventListener("click", function () {
+        if (!recognition) return;
+        if (isListening) {
           recognition.stop();
-          micBtn.innerHTML = "<svg width='20' height='20' fill='currentColor' viewBox='0 0 24 24'><path d='M12 3v11M8 15l4-3 4 3V3'/></svg>";
-        }
-      });
-    });
-
-    /* ---------- DOM Elements ---------- */
-    const microphoneBtn = document.querySelector(".actions-dock button"); /* fallback */
-
-    /* ---------- appendMessage ---------- */
-    function appendMessage(text, isUser) {
-      const msgDiv = document.createElement("div");
-      msgDiv.className = `message ${isUser ? "user" : "assistant"}`;
-
-      const avatar = document.createElement("div");
-      avatar.className = `avatar ${isUser ? "user" : "assistant"}`;
-      avatar.textContent = isUser ? "U" : "J";
-
-      const bubble = document.createElement("div");
-      bubble.className = `bubble ${isUser ? "user" : "assistant"}`;
-      bubble.textContent = text;
-
-      msgDiv.appendChild(avatar);
-      msgDiv.appendChild(bubble);
-      chatContainer.appendChild(msgDiv);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-    }
-
-    /* ---------- fetch /api/command ---------- */
-    function sendMsg() {
-      const text = cmdInput.value.trim();
-      if (!text) return;
-      appendMessage(text, true);
-      fetch("/api/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: text })
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.status === "success") {
-            appendMessage(data.message, false);
-          } else {
-            appendMessage("Error: " + (data.message || "Unknown error"), false);
-          }
-        })
-        .catch(err => {
-          appendMessage("Error communicating with server.", false);
-        });
-      cmdInput.value = "";
-    }
-
-    /* ---------- sendQuickCommand ---------- */
-    function sendQuickCommand(cmdText) {
-      const trimmed = (cmdText || "").trim();
-      if (!trimmed) return;
-      appendMessage(trimmed, true);
-      fetch("/api/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: trimmed })
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.status === "success") {
-            appendMessage(data.message, false);
-          }
-        });
-    }
-
-    /* ---------- Enter Key Listener ---------- */
-    cmdInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { sendMsg(); }
-    });
-    /* Also allow Space bar to start/stop voice listening if recognition available */
-    if (supportsSpeech) {
-      cmdInput.addEventListener("keydown", (e) => {
-        if (e.key === " " && recognition) {
-          e.preventDefault();
-          isListening = !isListening;
-          if (isListening) {
+          setListening(false);
+        } else {
+          try {
             recognition.start();
-            microphoneBtn.innerHTML = "<svg width='20' height='20' fill='red' viewBox='0 0 24 24'><path d='M12 3v11M8 15l4-3 4 3V3'/></svg>";
-          } else {
-            recognition.stop();
-            microphoneBtn.innerHTML = "<svg width='20' height='20' fill='currentColor' viewBox='0 0 24 24'><path d='M12 3v11M8 15l4-3 4 3V3'/></svg>";
+            setListening(true);
+          } catch (e) {
+            micHint.textContent = "Voice already active — try once more.";
           }
         }
       });
-    }
+
+      // ---------- Message Rendering ----------
+      function appendMessage(text, isUser) {
+        var msg = document.createElement("div");
+        msg.className = "msg " + (isUser ? "user" : "assistant");
+
+        var avatar = document.createElement("div");
+        avatar.className = "avatar";
+        avatar.textContent = isUser ? "YOU" : "J";
+
+        var bubble = document.createElement("div");
+        bubble.className = "bubble";
+        bubble.textContent = text;
+
+        msg.appendChild(avatar);
+        msg.appendChild(bubble);
+        chat.appendChild(msg);
+        chat.scrollTop = chat.scrollHeight;
+        return bubble;
+      }
+
+      function appendTyping() {
+        var msg = document.createElement("div");
+        msg.className = "msg assistant";
+        var avatar = document.createElement("div");
+        avatar.className = "avatar";
+        avatar.textContent = "J";
+        var bubble = document.createElement("div");
+        bubble.className = "bubble";
+        bubble.id = "typing-indicator";
+        bubble.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
+        msg.appendChild(avatar);
+        msg.appendChild(bubble);
+        chat.appendChild(msg);
+        chat.scrollTop = chat.scrollHeight;
+      }
+
+      function removeTyping() {
+        var t = document.getElementById("typing-indicator");
+        if (t) t.parentElement.remove();
+      }
+
+      // ---------- API Call ----------
+      function sendMsg(muted) {
+        var text = cmdInput.value.trim();
+        if (!text) return;
+        cmdInput.value = "";
+        appendMessage(text, true);
+        appendTyping();
+
+        fetch("/api/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command: text })
+        })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            removeTyping();
+            var reply = data && data.status === "success"
+              ? data.message
+              : (data && data.message ? "Error: " + data.message : "Error: Unknown error");
+            appendMessage(reply, false);
+          })
+          .catch(function () {
+            removeTyping();
+            appendMessage("Error communicating with the server. Is JARVIS running?", false);
+          });
+      }
+
+      // ---------- Events ----------
+      sendBtn.addEventListener("click", function () { sendMsg(); });
+      cmdInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { sendMsg(); }
+      });
+
+      document.querySelectorAll(".chip").forEach(function (chip) {
+        chip.addEventListener("click", function () {
+          var text = chip.getAttribute("data-cmd");
+          appendMessage(text, true);
+          appendTyping();
+          fetch("/api/command", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ command: text })
+          })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+              removeTyping();
+              appendMessage(data && data.status === "success" ? data.message : "Error", false);
+            })
+            .catch(function () {
+              removeTyping();
+              appendMessage("Error communicating with the server.", false);
+            });
+        });
+      });
+
+      // ---------- Health check ----------
+      fetch("/api/ping")
+        .then(function (res) { return res.json(); })
+        .then(function () {
+          statusBox.classList.add("online");
+          document.querySelector(".status-label").textContent = "Ready";
+        })
+        .catch(function () {
+          statusBox.classList.remove("online");
+          document.querySelector(".status-label").textContent = "Offline";
+        });
+    })();
   </script>
 </body>
 </html>
