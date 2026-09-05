@@ -1,7 +1,6 @@
 """JARVIS — macOS AI Assistant Backend.
 
 Flask REST API backend with native macOS system integration.
-No WebSockets or Socket.IO. Uses native fetch() calls from the frontend.
 Falls back gracefully if speech modules aren't fully available.
 """
 
@@ -16,7 +15,7 @@ import psutil
 app = Flask(__name__)
 
 # ---------------------------------------------------------------------------
-# Text-to-Speech Engine (always available via pyttsx3)
+# Text-to-Speech Engine (initialize once via pyttsx3)
 # ---------------------------------------------------------------------------
 try:
     import pyttsx3
@@ -35,7 +34,7 @@ except Exception:
     _engine = None
     def speak(text):
         """No-op if TTS not available."""
-        pass  # optional: print(f"TTS: {text}")
+        pass
 
 
 # ---------------------------------------------------------------------------
