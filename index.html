@@ -3,35 +3,38 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Virtual Butler — AI Assistant</title>
+  <title>Virtual Butler — macOS AI Assistant</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
+    /* ---------- CSS Variables: Cyberpunk Dark Mode ---------- */
     :root {
-      --bg: #0a0a0f;
-      --bg-secondary: #12121f;
+      --bg: #0a0a12;
+      --bg-secondary: #12121c;
       --bg-tertiary: #1a1a24;
-      --fg: #e8e8f0;
-      --muted: #6b6b80;
-      --accent: #00ffcc;
-      --accent-dim: rgba(0, 255, 204, 0.08);
-      --card: #16161f;
-      --border: rgba(0, 255, 204, 0.12);
-      --error: #ff5f57;
+      --fg: #e0e0f0;
+      --muted: #5a5a70;
+      --accent-cyan: #00ffcc;
+      --accent-purple: #bc13fe;
+      --accent-pink: #ff2e6e;
+      --card: #161620;
+      --border: rgba(0, 255, 204, 0.15);
+      --glass: rgba(10, 10, 18, 0.65);
+      --glow-cyan: 0 0 30px rgba(0, 255, 204, 0.4);
+      --glow-purple: 0 0 30px rgba(189, 19, 254, 0.3);
       --success: #00ffcc;
       --warning: #ffb347;
+      --error: #ff5f57;
     }
 
+    /* ---------- Base Reset ---------- */
     * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+      margin: 0; padding: 0; box-sizing: border-box;
     }
 
     html {
-      height: 100%;
-      -webkit-tap-highlight-color: transparent;
+      height: 100%; -webkit-tap-highlight-color: transparent;
     }
 
     body {
@@ -45,873 +48,376 @@
       overflow-x: hidden;
     }
 
-    .mono {
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-    }
+    .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
 
-    .bg-pattern {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
+    /* ---------- Background Atmosphere ---------- */
+    .bg-layer {
+      position: fixed; inset: 0; pointer-events: none;
       background:
-        radial-gradient(ellipse 100% 50% at 50% -30%, rgba(0, 255, 204, 0.06), transparent 50%),
-        radial-gradient(ellipse 80% 60% at 100% 100%, rgba(0, 150, 200, 0.05), transparent 50%),
+        radial-gradient(ellipse 100% 60% at 20% 20%, var(--glow-cyan), transparent 50%),
+        radial-gradient(ellipse 80% 50% at 80% 80%, var(--glow-purple), transparent 50%),
         linear-gradient(180deg, var(--bg) 0%, var(--bg-secondary) 100%);
-      z-index: 0;
+      z-index: -1;
     }
 
     .grid-overlay {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background:
-        linear-gradient(rgba(0, 255, 204, 0.02) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 255, 204, 0.02) 1px, transparent 1px);
-      background-size: 80px 80px;
-      z-index: 1;
+      position: fixed; inset: 0; pointer-events: none;
+      background: 
+        linear-gradient(rgba(0, 255, 204, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 255, 204, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      z-index: -1;
     }
 
+    /* ---------- Main Layout ---------- */
     .main {
-      position: relative;
-      z-index: 2;
-      min-height: 100%;
-      display: flex;
-      flex-direction: column;
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 40px 32px 32px;
-      gap: 32px;
+      position: relative; z-index: 1;
+      max-width: 1600px; margin: 0 auto; padding: 40px 32px 32px;
+      display: grid;
+      grid-template-areas:
+        "header header"
+        "chat dock"
+        "input dock";
+      grid-template-columns: 1fr 280px;
+      grid-template-rows: auto auto auto;
+      gap: 24px; max-height: 100vh; overflow-y: auto;
     }
 
+    /* ---------- Header (Telemetry + Status) ---------- */
     .header {
-      display: flex;
-      align-items: center;
-      justify-space-between;
-      gap: 24px;
-      padding: 16px 24px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      backdrop-filter: blur(10px);
+      grid-area: header;
+      display: flex; flex-direction: column; gap: 16px;
+      align-items: stretch;
     }
 
-    .header .logo {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+    .header-top {
+      display: flex; justify-content: space-between; align-items: center;
+      width: 100%;
     }
 
-    .header .logo-icon {
-      width: 48px;
-      height: 48px;
-      background: linear-gradient(135deg, var(--accent), #00ccbb);
-      border-radius: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .header .logo-icon svg {
-      width: 28px;
-      height: 28px;
-      filter: drop-shadow(0 0 24px rgba(0, 255, 204, 0.4));
-    }
-
-    .header .logo-text {
-      font-family: 'Inter', sans-serif;
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-    }
-
-    .header .logo-text span {
-      color: var(--accent);
-    }
-
-    .header .info {
-      display: flex;
-      align-items: center;
-      gap: 16px;
+    .status-bar {
+      display: flex; gap: 24px; align-items: center;
+      flex-wrap: wrap;
     }
 
     .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      transition: all 0.3s ease;
+      display: inline-flex; gap: 6px; padding: 8px 16px;
+      border-radius: 28px; font-size: 12px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.15em;
+      transition: all 0.3s ease; border: 1px solid var(--border);
     }
-
     .status-badge.connected {
-      background: rgba(0, 255, 204, 0.15);
-      color: var(--accent);
-      border: 1px solid rgba(0, 255, 204, 0.3);
+      background: rgba(0, 255, 204, 0.12); color: var(--accent-cyan);
+      border-color: var(--accent-cyan); box-shadow: var(--glow-cyan);
     }
-
     .status-badge.disconnected {
-      background: rgba(255, 95, 87, 0.15);
-      color: var(--error);
-      border: 1px solid rgba(255, 95, 87, 0.3);
+      background: rgba(255, 95, 87, 0.12); color: var(--error);
+      border-color: var(--error); box-shadow: var(--glow-purple);
     }
 
     .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--muted);
-      box-shadow: 0 0 12px rgba(0, 255, 204, 0.3);
+      width: 10px; height: 10px; border-radius: 50%;
       animation: pulse-soft 2s ease-in-out infinite;
     }
+    .status-dot.connected { background: var(--accent-cyan); box-shadow: 0 0 20px rgba(0, 255, 204, 0.5); }
+    .status-dot.disconnected { background: var(--error); box-shadow: 0 0 20px rgba(255, 95, 87, 0.5); }
 
-    @keyframes pulse-soft {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
+    .status-text { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+    .cpu-ram { display: flex; gap: 24px; align-items: center; font-family: 'JetBrains Mono', monospace; }
+    .cpu-ram .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .cpu-ram .value { color: var(--accent-cyan); font-size: 18px; }
 
-    .status-dot.connected {
-      background: var(--accent);
-      box-shadow: 0 0 20px rgba(0, 255, 204, 0.5);
-    }
-
-    .status-dot.disconnected {
-      background: var(--error);
-      box-shadow: 0 0 20px rgba(255, 95, 87, 0.5);
-    }
-
-    .status-text {
-      font-size: 11px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-    }
-
-    .nav-indicator {
-      width: 32px;
-      height: 32px;
-      border-radius: 10px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      color: var(--muted);
-      transition: all 0.2s ease;
-    }
-
-    .nav-indicator.online {
-      background: rgba(0, 255, 204, 0.1);
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 32px;
-      margin-bottom: 32px;
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-      transition: box-shadow 0.3s ease;
-    }
-
-    .card:hover {
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    }
-
-    .card-title {
-      font-size: 11px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      margin-bottom: 24px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .controls {
-      display: flex;
-      gap: 16px;
-      margin-top: 24px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 24px;
-      border-radius: 20px;
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      border: none;
-      transition: all 0.2s ease;
-    }
-
-    .btn:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      color: var(--bg);
-    }
-
-    .btn-primary:hover {
-      background: #00ffdd;
-      box-shadow: 0 4px 24px rgba(0, 255, 204, 0.3);
-      transform: translateY(-1px);
-    }
-
-    .btn-secondary {
-      background: var(--card);
-      color: var(--fg);
-      border: 1px solid var(--border);
-    }
-
-    .btn-secondary:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-      transform: translateY(-1px);
-    }
-
-    .btn-danger {
-      background: rgba(255, 95, 87, 0.1);
-      color: var(--error);
-      border: 1px solid rgba(255, 95, 87, 0.3);
-    }
-
-    .btn-danger:hover {
-      background: rgba(255, 95, 87, 0.15);
-      border-color: var(--error);
-    }
-
-    .voice-indicator {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-top: 8px;
-    }
-
-    .voice-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--muted);
-      animation: voice-dot 0.5s ease-in-out infinite;
-    }
-
-    @keyframes voice-dot {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.4); opacity: 0.5; }
-    }
-
-    .voice-dot.recording {
-      background: var(--error);
-      animation: none;
-    }
-
+    /* ---------- Chat Area ---------- */
     .chat-area {
-      flex: 1;
-      overflow-y: auto;
-      margin-top: 24px;
-      padding-top: 24px;
-      border-top: 1px solid var(--border);
-      scroll-behavior: smooth;
-    }
-
-    .chat-area::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    .chat-area::-webkit-scrollbar-track {
-      background: var(--bg-secondary);
-      border-radius: 4px;
-    }
-
-    .chat-area::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 4px;
-    }
-
-    .chat-area::-webkit-scrollbar-thumb:hover {
-      background: var(--accent);
+      grid-area: chat; overflow-y: auto; padding-right: 16px;
+      display: flex; flex-direction: column; gap: 12px;
     }
 
     .message {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 16px;
+      display: flex; gap: 12px; max-width: 90%;
       animation: message-in 0.3s ease-out;
     }
+    @keyframes message-in { from { opacity: 0; transform: translateY(8px); } }
 
-    @keyframes message-in {
-      from {
-        opacity: 0;
-        transform: translateY(8px);
-      }
-    }
-
-    .message.user {
-      flex-direction: row-reverse;
-    }
+    .message.user { justify-content: flex-end; }
+    .message.assistant { justify-content: flex-start; }
 
     .message-avatar {
-      width: 44px;
-      height: 44px;
-      border-radius: 22px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      font-weight: 600;
-      flex-shrink: 0;
+      width: 40px; height: 40px; border-radius: 20px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 600; flex-shrink: 0;
     }
-
-    .message-avatar.user {
-      background: var(--accent);
-      color: var(--bg);
-    }
-
-    .message-avatar.assistant {
-      background: var(--card);
-      color: var(--muted);
-    }
+    .message-avatar.user { background: var(--accent-cyan); color: var(--bg); }
+    .message-avatar.assistant { background: var(--card); color: var(--muted); }
 
     .message-bubble {
-      max-width: 78%;
-      padding: 16px 20px;
-      border-radius: 20px;
-      line-height: 1.4;
-      font-size: 14px;
+      max-width: 75%; padding: 14px 18px; border-radius: 20px;
+      line-height: 1.4; font-size: 14px;
     }
+    .message-bubble.user { background: var(--accent-cyan); color: var(--bg); margin-left: auto; }
+    .message-bubble.assistant { background: var(--card); color: var(--fg); border: 1px solid var(--border); }
 
-    .message-bubble.user {
-      background: var(--accent);
-      color: var(--bg);
+    .message-meta { font-size: 10px; color: var(--muted); margin-top: 4px; text-align: right; }
+    .message-meta.assistant { text-align: left; color: var(--muted); font-size: 11px; }
+
+    /* ---------- Quick Action Dock ---------- */
+    .dock {
+      grid-area: dock; display: flex; flex-direction: column; gap: 12px;
+      align-items: stretch; padding: 20px; background: var(--glass);
+      border-radius: 24px; border: 1px solid var(--border);
+      backdrop-filter: blur(12px);
     }
-
-    .message-bubble.assistant {
-      background: var(--card);
-      color: var(--fg);
+    .dock .title { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
+    .dock .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+    .action-btn {
+      padding: 14px; border-radius: 16px; border: none; cursor: pointer;
+      font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500;
+      transition: all 0.2s ease; position: relative; overflow: hidden;
     }
+    .action-btn::before { content: ""; position: absolute; inset: 0; border-radius: 16px; opacity: 0; transition: opacity 0.2s; }
+    .action-btn:hover { transform: translateY(-2px); box-shadow: var(--glow-cyan); }
+    .action-btn:hover::before { opacity: 0.2; }
+    .action-btn.cyan { background: rgba(0, 255, 204, 0.1); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); }
+    .action-btn.cyan:hover { box-shadow: var(--glow-cyan); }
+    .action-btn.purple { background: rgba(189, 19, 254, 0.1); border: 1px solid var(--accent-purple); color: var(--accent-purple); }
+    .action-btn.purple:hover { box-shadow: var(--glow-purple); }
+    .action-btn.terminal { background: rgba(34, 139, 34, 0.1); border: 1px solid #228B22; color: #228B22; }
+    .action-btn.terminal:hover { box-shadow: 0 0 20px #228B22; }
+    .action-btn.mute { background: rgba(255, 175, 50, 0.1); border: 1px solid var(--warning); color: var(--warning); }
 
-    .message-meta {
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: 6px;
+    /* ---------- Input Bar ---------- */
+    .input-bar {
+      grid-area: input; display: flex; gap: 12px; align-items: center;
+      padding: 20px; background: var(--glass); border-radius: 24px;
+      border: 1px solid var(--border); backdrop-filter: blur(12px);
+      transition: all 0.3s ease;
     }
-
-    .message-meta.user {
-      text-align: right;
-      font-size: 10px;
-    }
-
-    .input-area {
-      display: flex;
-      gap: 12px;
-      margin-top: 24px;
-      padding-top: 24px;
-      border-top: 1px solid var(--border);
-    }
-
+    .input-bar.expanded { gap: 16px; }
+    .input-bar:focus-within { border-color: var(--accent-cyan); box-shadow: var(--glow-cyan); }
     .input-field {
-      flex: 1;
-      padding: 16px 20px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      color: var(--fg);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 14px;
-      font-weight: 500;
-      resize: none;
-      outline: none;
+      flex: 1; padding: 14px 20px; background: var(--bg-secondary);
+      border: 1px solid var(--border); border-radius: 16px;
+      color: var(--fg); font-family: 'JetBrains Mono', monospace;
+      font-size: 14px; font-weight: 500; resize: none; outline: none;
       transition: border-color 0.2s ease;
     }
-
-    .input-field:focus {
-      border-color: var(--accent);
-    }
-
-    .input-field::placeholder {
-      color: var(--muted);
-    }
-
+    .input-field:focus { border-color: var(--accent-cyan); }
+    .input-field::placeholder { color: var(--muted); }
     .send-btn {
-      padding: 0 32px;
+      padding: 0 32px; background: var(--accent-cyan); color: var(--bg);
+      border: none; border-radius: 20px; font-weight: 600; font-size: 13px;
+      cursor: pointer; transition: all 0.2s ease; box-shadow: var(--glow-cyan);
     }
+    .send-btn:hover { background: #00e5bb; transform: translateY(-1px); box-shadow: 0 4px 24px rgba(0, 255, 204, 0.3); }
+    .send-btn:focus-visible { outline: 2px solid var(--bg); outline-offset: 2px; }
 
-    .quick-actions {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 16px;
-      margin-top: 24px;
-    }
-
-    .quick-action {
-      padding: 20px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .quick-action:hover {
-      border-color: var(--accent);
-      background: var(--accent-dim);
-    }
-
-    .quick-action svg {
-      width: 28px;
-      height: 28px;
-      color: var(--accent);
-    }
-
-    .system-info {
-      margin-top: 24px;
-      padding: 24px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-    }
-
-    .system-info h3 {
-      font-size: 11px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: 20px;
-    }
-
-    .system-info ul {
-      list-style: none;
-    }
-
-    .system-info li {
-      display: flex;
-      justify-content: space-between;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .system-info .key {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .system-info .value {
-      color: var(--accent);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 18px;
-    }
-
-    .system-info .value.critical {
-      color: var(--error);
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .voice-dot {
-        animation: none;
-      }
-      .message {
-        animation: none;
-      }
-    }
-
-    /* Reduced height for textarea on mobile */
+    /* Reduced mobile */
     @media (max-width: 640px) {
-      .input-field {
-        padding: 14px 16px;
-        font-size: 13px;
-      }
-      .btn-primary {
-        padding: 0 20px;
-        font-size: 12px;
-      }
+      .main { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; gap: 16px; }
+      .header-top { flex-direction: column; gap: 12px; }
+      .dock { order: 3; width: 100%; }
+      .input-bar { order: 4; }
     }
   </style>
 </head>
 <body>
-  <div class="bg-pattern"></div>
+  <div class="bg-layer"></div>
   <div class="grid-overlay"></div>
 
   <div class="main">
+    <!-- ============ HEADER ============ -->
     <header class="header">
-      <div class="logo">
-        <div class="logo-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M5 3v6h14V3H5z"/></svg></div>
-        <div class="logo-text">Virtual Butler</div>
-      </div>
-      <div class="info">
-        <div class="status-badge disconnected" id="status-badge">Disconnected</div>
+      <div class="header-top">
+        <div class="status-bar">
+          <div class="status-badge disconnected" id="status-badge">DISCONNECTED</div>
+          <div class="status-dot disconnected" id="status-dot"></div>
+          <div class="status-text">Disconnected</div>
+        </div>
+        <div class="cpu-ram" id="cpu-ram">
+          <span class="label">CPU</span><span class="value" id="cpu-value">--</span>%
+          <span class="label">RAM</span><span class="value" id="mem-value">--</span>%
+        </div>
       </div>
     </header>
 
-    <div class="card">
-      <div class="card-title">Conversation</div>
-      <div class="chat-area" id="chat-area">
-        <div class="message assistant">
-          <div class="message-avatar assistant">BUT</div>
-          <div class="message-bubble assistant">
-            Hello sir! Virtual Butler is ready. How may I assist you today?
-          </div>
-          <div class="message-meta assistant">Just now</div>
+    <!-- ============ CHAT AREA ============ -->
+    <div class="chat-area" id="chat-area">
+      <div class="message assistant">
+        <div class="message-avatar assistant">BUT</div>
+        <div class="message-bubble assistant">
+          Hello sir! Virtual Butler is ready. How may I assist you today?
         </div>
+        <div class="message-meta assistant">Just now</div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-title">Command</div>
-      <div class="input-area">
-        <textarea class="input-field" id="command-input" placeholder="Type your command..." rows="1" spellcheck="false"></textarea>
-        <button class="btn btn-primary send-btn" id="send-btn">Send</button>
+    <!-- ============ QUICK ACTION DOCK ============ -->
+    <div class="dock">
+      <div class="title">Quick Actions</div>
+      <div class="actions">
+        <!-- YouTube -->
+        <button class="action-btn cyan" onclick="executeAction('open_youtube')">YouTube</button>
+        <!-- Terminal -->
+        <button class="action-btn terminal" onclick="executeAction('open_terminal')">Terminal</button>
+        <!-- System Check -->
+        <button class="action-btn cyan" onclick="executeAction('system_check')">System Check</button>
+        <!-- Finder -->
+        <button class="action-btn cyan" onclick="executeAction('open_finder')">Finder</button>
+        <!-- Mute/Unmute -->
+        <button class="action-btn mute" onclick="executeAction('toggle_mute')">Mute/Unmute</button>
       </div>
     </div>
 
-    <div class="quick-actions" id="quick-actions">
-      <!-- Quick action buttons will be injected by JS -->
-    </div>
-
-    <div class="system-info" id="system-info">
-      <h3>System</h3>
-      <ul>
-        <li><span class="key">Status</span><span class="value" id="system-status">Initializing...</span></li>
-        <li><span class="key">Model</span><span class="value" id="system-model">Loading...</span></li>
-        <li><span class="key">Latency</span><span class="value" id="system-latency">--</span>ms</li>
-      </ul>
+    <!-- ============ INPUT BAR ============ -->
+    <div class="input-bar" id="input-bar">
+      <textarea class="input-field" id="command-input" placeholder="Type a command..." rows="1" spellcheck="false"></textarea>
+      <button class="send-btn" id="send-btn">Send</button>
     </div>
   </div>
 
-  <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+  <!-- ============ Socket.IO ============ -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
-const BACKEND_URL = 'http://127.0.0.1:5000';
-
-// Initialize Socket.IO connection
-    const socket = io('http://127.0.0.1:5000', {
-      transports: ['websocket', 'polling']
+  <script>
+    /* ---------- Socket.IO Connection ---------- */
+    const socket = io("http://127.0.0.1:5000", {
+      transports: ["websocket", "polling"],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+      timeout: 10000
     });
 
-    // Track connection state
+    /* ---------- DOM Elements ---------- */
+    const statusBadge = document.getElementById("status-badge");
+    const statusDot = document.getElementById("status-dot");
+    const statusText = statusBadge ? statusBadge.querySelector(".status-text") : null;
+    const cpuValue = document.getElementById("cpu-value");
+    const memValue = document.getElementById("mem-value");
+    const chatArea = document.getElementById("chat-area");
+    const commandInput = document.getElementById("command-input");
+    const sendBtn = document.getElementById("send-btn");
+    const inputBar = document.getElementById("input-bar");
+
+    /* ---------- Connection State ---------- */
     let isConnected = false;
-    let reconnectTimer = null;
 
-    // On successful connection, update status and load system info
-    socket.on('connect', () => {
+    /* ---------- On Connect ---------- */
+    socket.on("connect", () => {
       isConnected = true;
-      statusBadge.textContent = 'CONNECTED';
-      statusBadge.className = 'status-badge connected';
-      loadSystemInfoOnConnect();
+      statusBadge.className = "status-badge connected";
+      statusBadge.textContent = "CONNECTED";
+      statusDot.className = "status-dot connected";
+      statusText.textContent = "Connected";
+      updateCpuRam();
     });
 
-    socket.on('disconnect', () => {
+    /* ---------- On Disconnect ---------- */
+    socket.on("disconnect", () => {
       isConnected = false;
-      statusBadge.textContent = 'DISCONNECTED';
-      statusBadge.className = 'status-badge disconnected';
+      statusBadge.className = "status-badge disconnected";
+      statusBadge.textContent = "DISCONNECTED";
+      statusDot.className = "status-dot disconnected";
+      statusText.textContent = "DISCONNECTED";
     });
 
-    const chatArea = document.getElementById('chat-area');
-    const commandInput = document.getElementById('command-input');
-    const sendBtn = document.getElementById('send-btn');
-    const statusBadge = document.getElementById('status-badge');
-    const systemStatus = document.getElementById('system-status');
-    const systemModel = document.getElementById('system-model');
-    const systemLatency = document.getElementById('system-latency');
+    /* ---------- System Health Polling ---------- */
+    function updateCpuRam() {
+      socket.emit("system_check", {});
+      setTimeout(updateCpuRam, 8000);
+    }
 
-    // DOM elements
-    const quickActions = document.getElementById('quick-actions');
-
-    // State
-    let isListening = false;
-
-    // Render functions
+    /* ---------- Render Messages ---------- */
     function addMessage(text, isUser = false) {
-      const div = document.createElement('div');
-      div.className = `message ${isUser ? 'user' : 'assistant'}`;
-      
-      const avatarClass = isUser ? 'user' : 'assistant';
-      
+      const div = document.createElement("div");
+      div.className = `message ${isUser ? "user" : "assistant"}`;
+
+      const avatarClass = isUser ? "user" : "assistant";
+      const bubbleClass = isUser ? "message-bubble user" : "message-bubble assistant";
+
       div.innerHTML = `
-        <div class="message-avatar ${avatarClass}">${isUser ? 'U' : 'B'}</div>
-        <div class="message-bubble ${isUser ? 'user' : 'assistant'}">
+        <div class="message-avatar ${avatarClass}">${isUser ? "U" : "B"}</div>
+        <div class="message-bubble ${bubbleClass}">
           ${escapeHtml(text)}
         </div>
-        <div class="message-meta ${isUser ? 'user' : 'assistant'}">
-          ${isUser ? 'Just now' : formatTime()}
+        <div class="message-meta ${isUser ? "message-meta user" : "message-meta assistant"}">
+          ${isUser ? "Just now" : formatTime()}
         </div>
       `;
-      
+
       chatArea.appendChild(div);
       chatArea.scrollTop = chatArea.scrollHeight;
     }
 
     function escapeHtml(text) {
-      const div = document.createElement('div');
+      const div = document.createElement("div");
       div.textContent = text;
       return div.innerHTML;
     }
 
     function formatTime() {
-      return new Date().toLocaleTimeString([], { minute: '2-digit', second: '2-digit' });
+      return new Date().toLocaleTimeString([], { minute: "2-digit", second: "2-digit" });
     }
 
-    function updateStatus(connected, initializing = false) {
-      isConnected = connected;
-      
-      const statusClass = connected ? 'connected' : 'disconnected';
-      statusBadge.className = `status-badge ${statusClass}`;
-      statusBadge.textContent = connected ? 'Connected' : 'Disconnected';
-      
-      // Save state to localStorage
-      try {
-        localStorage.setItem('butlerConnectionState', connected ? 'connected' : 'disconnected');
-      } catch (e) {
-        // localStorage may be full or disabled
-      }
-    }
-
-    function setListening(listening) {
-      // Status badge handles visual state; no separate dot needed
-      isListening = listening;
-    }
-
-    function loadSystemInfoOnConnect() {
-      socket.emit('system_check', {});
-    }
-
-    function updateSystemInfo(info) {
-      if (info.status) {
-        systemStatus.textContent = info.status;
-        const statusClass = info.status === 'Connected' ? 'connected' : 'disconnected';
-        systemStatus.className = `value ${statusClass}`;
-      }
-      if (info.model) systemModel.textContent = info.model;
-      if (info.latency !== undefined) {
-        const latencyMs = typeof info.latency === 'number' ? info.latency : parseInt(info.latency);
-        systemLatency.textContent = isNaN(latencyMs) ? '--' : latencyMs + 'ms';
-        systemLatency.classList.remove('critical');
-        if (latencyMs > 200) {
-          systemLatency.classList.add('critical');
-        }
-      }
-    }
-
-    // Handle system_check response from backend
-    socket.on('system_check_response', (data) => {
-      updateSystemInfo(data);
-    });
-
-    // Handle status_update from backend
-    socket.on('status_update', (data) => {
-      const { state, model, latency } = data || {};
-      
-      // Update connection state
-      updateStatus(state === 'CONNECTED');
-      
-      // Update system info
-      if (model) systemModel.textContent = model;
-      if (latency !== undefined) {
-        const latencyMs = typeof latency === 'number' ? latency : parseInt(latency);
-        systemLatency.textContent = isNaN(latencyMs) ? '--' : latencyMs + 'ms';
-      }
-    });
-
-    // Handle command_result from backend
-    socket.on('command_result', (data) => {
-      const msg = data.message || data.status || 'Command processed';
+    /* ---------- Handle command_result ---------- */
+    socket.on("command_result", (data) => {
+      const msg = data.message || data.status || "Command processed";
       addMessage(msg, true);
-      updateSystemInfo({ latency: data.latency });
     });
 
-    // Handle system_event from backend
-    socket.on('system_event', (data) => {
-      if (data.message) {
-        addMessage(data.message, false);
-      }
-      if (data.status) {
-        updateStatus(true, false);
-      }
-      if (data.model) {
-        systemModel.textContent = data.model;
-      }
-      if (data.latency !== undefined) {
-        const latencyMs = typeof data.latency === 'number' ? data.latency : parseInt(data.latency);
-        systemLatency.textContent = isNaN(latencyMs) ? '--' : latencyMs + 'ms';
-      }
+    /* ---------- Handle system_check ---------- */
+    socket.on("system_check_response", (data) => {
+      if (data.cpu !== undefined) cpuValue.textContent = data.cpu;
+      if (data.memory !== undefined) memValue.textContent = data.memory;
     });
 
-    // Handle error events
-    socket.on('error', (data) => {
-      console.error('Socket error:', data);
-      if (data.message && isConnected) {
-        updateStatus(false);
-        showToast(data.message, 'error');
-      }
-    });
+    /* ---------- Send Command ---------- */
+    function sendCommand() {
+      const text = commandInput.value.trim();
+      if (!text) return;
 
-    // Event listeners
-    sendBtn.addEventListener('click', sendCommand);
-    
-    commandInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
+      // Add user message to chat immediately
+      addMessage(text, true);
+
+      // Emit send_command with the command text
+      socket.emit("send_command", { text });
+
+      // Clear input
+      commandInput.value = "";
+      inputBar.classList.remove("expanded");
+    }
+
+    /* ---------- Enter Key Submission ---------- */
+    commandInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
         sendCommand();
       }
     });
 
-    // Auto-reconnect handling
-    function handleReconnect() {
-      if (!isConnected) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = setTimeout(() => {
-          socket.connect();
-        }, 3000);
-      }
-    }
+    /* ---------- Quick Action Dock ---------- */
+    function executeAction(action) {
+      // Visual feedback
+      sendBtn.disabled = true;
+      sendBtn.style.opacity = "0.5";
 
-    socket.on('connect_error', (error) => {
-      console.error('Connection error:', error);
-      updateStatus(false);
-      showToast('Connection lost. Reconnecting...', 'warning');
-    });
+      // Map actions to backend commands
+      const actions = {
+        open_youtube: "open youtube",
+        open_terminal: "open terminal",
+        system_check: "system info",
+        open_finder: "open finder",
+        toggle_mute: "set volume 0"
+      };
 
-    socket.on(' reconnect_attempt', (attempt) => {
-      console.log(`Reconnection attempt ${attempt}`);
-    });
-
-    socket.on('reconnect', () => {
-      isConnected = true;
-      updateStatus(true);
-      loadSystemInfoOnConnect();
-      showToast('Reconnected successfully', 'success');
-    });
-
-    socket.on('reconnect_error', () => {
-      showToast('Failed to reconnect. Checking connectivity...', 'error');
-    });
-
-    socket.on('reconnect_failed', () => {
-      showToast('Could not reconnect. Please refresh the page.', 'error');
-    });
-
-    // Send command
-    function sendCommand() {
-      const text = commandInput.value.trim();
-      if (!text) return;
-      
-      // Emit send_command with { command: inputText }
-      socket.emit('send_command', { command: text });
-      
-      // Clear input
-      commandInput.value = '';
-    }
-
-    // Quick action buttons
-    function renderQuickActions(actions) {
-      quickActions.innerHTML = '';
-      actions.forEach(action => {
-        const btn = document.createElement('div');
-        btn.className = 'quick-action';
-        btn.innerHTML = `
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-currentColor>
-            ${action.svg}
-          </svg>
-          <span>${action.label}</span>
-        `;
-        btn.addEventListener('click', () => {
-          commandInput.value = action.command;
-          sendCommand();
-        });
-        quickActions.appendChild(btn);
+      const cmd = actions[action] || action;
+      socket.emit("send_command", { text: cmd }, (response) => {
+        sendBtn.disabled = false;
+        sendBtn.style.opacity = "1";
+        // Response already handled via socket.on('command_result')
       });
     }
 
-    // Initial quick actions
-    renderQuickActions([
-      { label: 'Open App', svg: '<path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M5 3v6h14V3H5"/>', command: 'open_app Safari' },
-      { label: 'Search Web', svg: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>', command: 'search_web best pasta recipe' },
-      { label: 'Set Volume', svg: '<polyline points="21 15 16 10 5 21"/>', command: 'set_volume 70' }
-    ]);
-
-    // Toast notifications
-    function showToast(message, type = 'info') {
-      const toast = document.createElement('div');
-      const typeStyles = {
-        success: 'background: rgba(0, 255, 204, 0.2); border: 1px solid var(--success);',
-        error: 'background: rgba(255, 95, 87, 0.2); border: 1px solid var(--error);',
-        warning: 'background: rgba(246, 173, 85, 0.2); border: 1px solid var(--warning);',
-        info: 'background: rgba(0, 150, 200, 0.2); border: 1px solid #0096c8;'
-      };
-      
-      toast.style.cssText = `
-        ${typeStyles[type] || typeStyles.info}
-        padding: 14px 20px;
-        border-radius: 16px;
-        margin: 16px 0;
-        color: var(--fg);
-        font-size: 13px;
-        backdrop-filter: blur(10px);
-        animation: slide-in 0.3s ease-out;
-      `;
-      toast.textContent = message;
-      
-      chatArea.prepend(toast);
-      
-      setTimeout(() => {
-        toast.style.animation = 'slide-out 0.3s ease-in';
-        setTimeout(() => toast.remove(), 300);
-      }, 3000);
-    }
-
-    // Add CSS for toast animations
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes slide-in {
-        from { opacity: 0; transform: translateY(-8px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      @keyframes slide-out {
-        from { opacity: 1; transform: translateY(0); }
-        to { opacity: 0; transform: translateY(-8px); }
-      }
-    `;
-    document.head.appendChild(style);
+    /* ---------- Initial System Check ---------- */
+    socket.emit("system_check", {});
   </script>
-
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-
-<script>
-  const socket = io('http://127.0.0.1:5000', { transports: ['websocket', 'polling'] });
-  
-  socket.on('connect', () => {
-    console.log('Connected to backend!');
-    const badge = document.querySelector('.status-badge');
-    if (badge) {
-      badge.textContent = 'CONNECTED';
-      badge.className = 'status-badge connected';
-    }
-  });
-
-  socket.on('disconnect', () => {
-    const badge = document.querySelector('.status-badge');
-    if (badge) {
-      badge.textContent = 'DISCONNECTED';
-      badge.className = 'status-badge disconnected';
-    }
-  });
-</script>
 </body>
 </html>
