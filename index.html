@@ -599,15 +599,11 @@
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
 
-    const BACKEND_URL = 'http://127.0.0.1:5000';
+const BACKEND_URL = 'http://127.0.0.1:5000';
 
-    // Initialize Socket.IO connection with auto-reconnection config
-    const socket = io(BACKEND_URL, {
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
-      reconnectionDelayMax: 5000,
-      timeout: 10000
+// Initialize Socket.IO connection
+    const socket = io('http://127.0.0.1:5000', {
+      transports: ['websocket', 'polling']
     });
 
     // Track connection state
@@ -617,8 +613,15 @@
     // On successful connection, update status and load system info
     socket.on('connect', () => {
       isConnected = true;
-      updateStatus(true);
+      statusBadge.textContent = 'CONNECTED';
+      statusBadge.className = 'status-badge connected';
       loadSystemInfoOnConnect();
+    });
+
+    socket.on('disconnect', () => {
+      isConnected = false;
+      statusBadge.textContent = 'DISCONNECTED';
+      statusBadge.className = 'status-badge disconnected';
     });
 
     const chatArea = document.getElementById('chat-area');
@@ -682,7 +685,7 @@
     }
 
     function setListening(listening) {
-      statusDot.classList.toggle('recording', listening);
+      // Status badge handles visual state; no separate dot needed
       isListening = listening;
     }
 
