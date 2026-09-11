@@ -1,0 +1,31 @@
+{
+  "academic_year": "2026-2027",
+  "term_1": ["2026-09-08", "2027-01-22"],
+  "semester_break": ["2027-01-23", "2027-02-05"],
+  "term_2": ["2027-02-08", "2027-06-18"],
+  "summer_start": "2027-06-19",
+  "timetable": {
+    "0": ["MATH", "ENG", "TUR", "BIO", "VIA/MUS"],
+    "1": ["ENG", "MATH", "GER", "PHY", "TUR"],
+    "2": ["CHE", "ENG", "HIS", "PHY", "DT", "GER"],
+    "3": ["TUR", "BIO", "MATH", "HIS", "ECL"],
+    "4": ["GER", "PE", "R&E", "CHE", "GEO", "ENG"],
+    "5": [],
+    "6": []
+  },
+  "no_school_days": {
+    "2026-09-09": "Uyum Haftası (okul yok)",
+    "2026-10-29": "Cumhuriyet Bayramı",
+    "2027-01-01": "Yılbaşı",
+    "2027-04-23": "23 Nisan Ulusal Egemenlik ve Çocuk Bayramı",
+    "2027-05-19": "19 Mayıs Atatürk'ü Anma, Gençlik ve Spor Bayramı"
+  },
+  "no_school_ranges": [
+    ["2026-11-16", "2026-11-20", "Ara Tatil (Kasım)"],
+    ["2027-01-23", "2027-02-05", "Yarıyıl Tatili"],
+    ["2027-04-05", "2027-04-09", "Ara Tatil (Nisan)"],
+    ["2027-04-11", "2027-04-12", "Ramazan Bayramı"],
+    ["2027-05-18", "2027-05-21", "Kurban Bayramı"],
+    ["2027-06-19", "2027-09-30", "Yaz Tatili"]
+  ]
+}

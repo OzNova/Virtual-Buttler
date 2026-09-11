@@ -10,7 +10,9 @@ from flask import Flask, jsonify, render_template, request
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(ROOT, "userData")
 DATA_FILE = os.path.join(DATA_DIR, "planner.json")
+CONFIG_FILE = os.path.join(ROOT, "config.json")
 LOCK = threading.Lock()
+PORT = int(os.environ.get("PLANNER_PORT") or 5000)
 
 BREAK_MIN = 10
 
@@ -86,24 +88,15 @@ SUBJECT_ALIASES = {
     "R&E": ["research", "research & enquiry", "araştırma", "rea", "r&e"],
 }
 
-# ============ 2026-2027 academic calendar (Turkey, editable) ============
-ACADEMIC_YEAR = "2026-2027"
-TERM_1 = ("2026-09-08", "2027-01-22")
-SEMESTER_BREAK = ("2027-01-23", "2027-02-05")
-TERM_2 = ("2027-02-08", "2027-06-18")
-SUMMER_START = "2027-06-19"
-
-# Single no-school days (national holidays / ceremonies).
-NO_SCHOOL_DAYS = {
+# ============ Academic calendar (Turkey, editable via config.json) ============
+NO_SCHOOL_DAYS_DEFAULT = {
     "2026-09-09": "Uyum Haftası (okul yok)",
     "2026-10-29": "Cumhuriyet Bayramı",
     "2027-01-01": "Yılbaşı",
     "2027-04-23": "23 Nisan Ulusal Egemenlik ve Çocuk Bayramı",
     "2027-05-19": "19 Mayıs Atatürk'ü Anma, Gençlik ve Spor Bayramı",
 }
-
-# No-school ranges (midterm breaks, semester break, bayram, summer).
-NO_SCHOOL_RANGES = [
+NO_SCHOOL_RANGES_DEFAULT = [
     ("2026-11-16", "2026-11-20", "Ara Tatil (Kasım)"),
     ("2027-01-23", "2027-02-05", "Yarıyıl Tatili"),
     ("2027-04-05", "2027-04-09", "Ara Tatil (Nisan)"),
@@ -111,6 +104,34 @@ NO_SCHOOL_RANGES = [
     ("2027-05-18", "2027-05-21", "Kurban Bayramı"),
     ("2027-06-19", "2027-09-30", "Yaz Tatili"),
 ]
+
+
+def _load_calendar():
+    """Load calendar overrides from config.json; fall back to defaults below."""
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as fh:
+            cfg = json.load(fh)
+        return cfg if isinstance(cfg, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+_CALENDAR = _load_calendar()
+
+ACADEMIC_YEAR = str(_CALENDAR.get("academic_year", "2026-2027"))
+TERM_1 = tuple(_CALENDAR.get("term_1", ("2026-09-08", "2027-01-22")))
+SEMESTER_BREAK = tuple(_CALENDAR.get("semester_break", ("2027-01-23", "2027-02-05")))
+TERM_2 = tuple(_CALENDAR.get("term_2", ("2027-02-08", "2027-06-18")))
+SUMMER_START = str(_CALENDAR.get("summer_start", "2027-06-19"))
+
+# Single no-school days (national holidays / ceremonies).
+NO_SCHOOL_DAYS = dict(_CALENDAR.get("no_school_days") or NO_SCHOOL_DAYS_DEFAULT)
+
+# No-school ranges (midterm breaks, semester break, bayram, summer).
+NO_SCHOOL_RANGES = [tuple(r) for r in (_CALENDAR.get("no_school_ranges") or NO_SCHOOL_RANGES_DEFAULT)]
+
+for k, v in (_CALENDAR.get("timetable") or {}).items():
+    TIMETABLE[int(k)] = v
 
 app = Flask(__name__)
 
@@ -126,6 +147,13 @@ def _minutes(hhmm):
 def _hhmm(total):
     total %= 24 * 60
     return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def _int_or(value, default):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
 
 
 def _load_doc():
@@ -148,8 +176,10 @@ def _load_doc():
 
 def _save_doc(doc):
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(DATA_FILE, "w", encoding="utf-8") as fh:
+    tmp = DATA_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(doc, fh, ensure_ascii=False, indent=2)
+    os.replace(tmp, DATA_FILE)
 
 
 def _load_plan():
@@ -165,12 +195,17 @@ def _stats(blocks):
 
 
 def _repair_plan(plan):
+    # Normalize blocks written by older versions. Must not destroy live
+    # session state (active/started_at/elapsed) or user extensions, which
+    # would otherwise be lost on every reload/restart.
     for b in plan.get("blocks", []):
         window = max(1, b.get("end", 0) - b.get("start", 0))
-        b["duration"] = window
-        b["origDuration"] = window
-        b["active"] = False
-        b.pop("started_at", None)
+        if not isinstance(b.get("duration"), int):
+            b["duration"] = window
+        if not isinstance(b.get("origDuration"), int):
+            b["origDuration"] = window
+        b.setdefault("active", False)
+        b.setdefault("elapsed", 0)
 
 
 def _upsert_weak(doc, item):
@@ -182,19 +217,28 @@ def _upsert_weak(doc, item):
     return weak
 
 
+TOMORROW_MAX = 30
+MISSED_MAX = 50
+HISTORY_DAYS_KEPT = 120
+
+
 def _tomorrow_add(doc, block):
     items = doc.setdefault("tomorrow", [])
+    now = int(time.time())
     for it in items:
         if it["subject"] == block["subject"] and it["topic"] == block["topic"]:
             it["time"] = block["time"]
-            it["added"] = int(time.time())
+            it["added"] = now
             return items
     items.insert(0, {
         "subject": block["subject"],
         "topic": block["topic"],
         "time": block["time"],
-        "added": int(time.time()),
+        "day": _day_key(now),
+        "added": now,
     })
+    if len(items) > TOMORROW_MAX:
+        del items[TOMORROW_MAX:]
     return items
 
 
@@ -245,13 +289,14 @@ def _log_history(doc, block):
             if q or p:
                 h["questions"] = q
                 h["pages"] = p
-            _game_record_day(doc, day)
-            _game_end(doc, block)
-            return
-    hist.append({
-        "day": day, "subject": subj, "topic": topic,
-        "minutes": minutes, "questions": q, "pages": p, "ts": now_ts,
-    })
+            break
+    else:
+        hist.append({
+            "day": day, "subject": subj, "topic": topic,
+            "minutes": minutes, "questions": q, "pages": p, "ts": now_ts,
+        })
+    cutoff = _day_key(now_ts - HISTORY_DAYS_KEPT * 86400)
+    doc["history"] = [h for h in hist if str(h.get("day") or "") >= cutoff]
     _game_record_day(doc, day)
     _game_end(doc, block)
 
@@ -313,18 +358,20 @@ def _game_end(doc, block):
 
 
 def _compute_streak(g):
-    days = sorted(g.get("history_days", []), reverse=True)
+    days = set(g.get("history_days", []))
     if not days:
         return 0
-    streak = 1
-    cur = datetime.strptime(days[0], "%Y-%m-%d")
-    for i in range(1, len(days)):
-        prev = datetime.strptime(days[i], "%Y-%m-%d")
-        if (cur - prev).days == 1:
-            streak += 1
-            cur = prev
-        else:
-            break
+    today = _day_key(int(time.time()))
+    # A streak is broken if neither today nor yesterday has an entry.
+    if today not in days and _day_key(int(time.time()) - 86400) not in days:
+        return 0
+    streak = 0
+    cur = datetime.strptime(today, "%Y-%m-%d")
+    if _day_key(int(cur.timestamp())) not in days:
+        cur -= timedelta(days=1)  # today not studied yet — count from yesterday
+    while _day_key(int(cur.timestamp())) in days:
+        streak += 1
+        cur -= timedelta(days=1)
     return streak
 
 
@@ -388,6 +435,20 @@ def _next_school_day(daykey, step=1):
     return daykey
 
 
+def _nth_school_day(daykey, n):
+    """The n-th upcoming school day (skips weekends and holidays)."""
+    cur = datetime.strptime(daykey, "%Y-%m-%d")
+    found = 0
+    for _ in range(60):
+        cur += timedelta(days=1)
+        key = cur.strftime("%Y-%m-%d")
+        if _day_status(key)[0] == "school":
+            found += 1
+            if found == n:
+                return key
+    return daykey
+
+
 def _subject_code(name):
     norm = str(name or "").strip().lower()
     for code, names in SUBJECT_ALIASES.items():
@@ -438,6 +499,8 @@ def _add_missed(doc, item):
         "source": item.get("source") or "plan",
         "confidence": item.get("confidence") or "yellow",
     })
+    if len(missed) > MISSED_MAX:
+        del missed[: len(missed) - MISSED_MAX]
     return missed
 
 
@@ -550,7 +613,31 @@ def _find_block(plan, bid):
     return None
 
 
-def build_plan(topics, start, end, duration_h, mode, criterion):
+def _merge_into_plan(target, new):
+    # Append a freshly built plan's blocks to the end of an existing day plan
+    # instead of replacing it (used when injecting a weak/pushed topic into
+    # a day that already has a plan).
+    blocks = target.setdefault("blocks", [])
+    cursor = max((b["end"] for b in blocks), default=_minutes(target["input"]["start"]))
+    for b in new.get("blocks", []):
+        nb = dict(b)
+        nb["id"] = uuid.uuid4().hex[:12]
+        nb["start"] = cursor
+        nb["end"] = cursor + nb["duration"]
+        nb["time"] = f"{_hhmm(cursor)}-{_hhmm(nb['end'])}"
+        blocks.append(nb)
+        cursor = nb["end"]
+    have = {(t.get("subject"), t.get("topic")) for t in target["input"].get("topics", [])}
+    for it in new["input"]["topics"]:
+        key = (it["subject"], it["topic"])
+        if key not in have:
+            target["input"]["topics"].append(it)
+            have.add(key)
+    target["stats"] = _stats(blocks)
+    return target
+
+
+def build_plan(topics, start, end, duration_h, mode, criterion, now=None):
     if not topics:
         return None, "En az bir konu seçmelisin."
     s, e = _minutes(start), _minutes(end)
@@ -561,7 +648,13 @@ def build_plan(topics, start, end, duration_h, mode, criterion):
     if e - s < 30:
         return None, "Zaman penceresi en az 30 dakika olmalı."
 
-    today_key = _day_key(int(time.time()))
+    if isinstance(now, datetime):
+        now_ts = int(now.timestamp())
+    elif now is not None:
+        now_ts = int(now)
+    else:
+        now_ts = int(time.time())
+    today_key = _day_key(now_ts)
     day_status, day_label = _day_status(today_key)
     today_subjects, _, _ = _subjects_for_day(today_key)
     next_key = _next_school_day(today_key)
@@ -764,7 +857,7 @@ def make_plan():
         topics,
         str(body.get("start") or "17:00"),
         str(body.get("end") or "19:00"),
-        int(body.get("duration_h") or 4),
+        _int_or(body.get("duration_h"), 4),
         str(body.get("mode") or "practice"),
         str(body.get("criterion") or "A"),
     )
@@ -775,46 +868,34 @@ def make_plan():
         for it in plan["input"]["topics"]:
             if it["confidence"] == "red":
                 _upsert_weak(doc, it)
-        _merge_scheduled(doc, plan, _day_key(int(time.time())))
-        doc["plan"] = plan
+        existing = doc.get("plan")
+        today = _day_key(int(time.time()))
+        if body.get("append") and isinstance(existing, dict) and existing.get("blocks"):
+            _merge_into_plan(existing, plan)
+            _merge_scheduled(doc, existing, today)
+            doc["plan"] = existing
+        else:
+            _merge_scheduled(doc, plan, today)
+            doc["plan"] = plan
         _save_doc(doc)
     out = drawer(doc)
     out["status"] = "success"
-    out["plan"] = plan
+    out["plan"] = doc["plan"]
     return jsonify(out)
 
 
 @app.post("/api/blocks")
 def blocks():
+    # Only plan clearing lives here; block state changes go through
+    # /api/blocks/adjust (single code path for done/extend/push/...).
     body = request.get_json(silent=True) or {}
     with LOCK:
         doc = _load_doc()
-        plan = doc.get("plan")
         if body.get("clear"):
             doc["plan"] = None
             _save_doc(doc)
             return jsonify({"status": "success", "plan": None})
-        if not plan:
-            return jsonify({"status": "error", "message": "Blok bulunamadı."}), 404
-        target = body.get("id")
-        status = body.get("status")
-        block = _find_block(plan, target)
-        if not block:
-            return jsonify({"status": "error", "message": "Blok bulunamadı."}), 404
-        if block.get("type") == "study" and status in ("done", "pending"):
-            was_done = block.get("status") == "done"
-            if status == "done":
-                if body.get("zen_abandon"):
-                    block["zen_abandon"] = True
-                block["status"] = "done"
-            else:
-                block["status"] = "pending"
-            if status == "done" and not was_done:
-                _log_history(doc, block)
-        plan["stats"] = _stats(plan.get("blocks", []))
-        doc["plan"] = plan
-        _save_doc(doc)
-    return jsonify({"status": "success", "plan": plan})
+        return jsonify({"status": "error", "message": "Bu uç yalnızca clear destekliyor."}), 400
 
 
 @app.post("/api/blocks/adjust")
@@ -826,10 +907,14 @@ def adjust():
         plan = doc.get("plan")
 
         if action == "shift":
-            offset = int(body.get("offset") or 0)
+            offset = _int_or(body.get("offset"), 0)
             if not plan:
                 return jsonify({"status": "error", "message": "Önce bir plan oluştur."}), 400
             if offset:
+                if offset > 0 and max(b["end"] for b in plan["blocks"]) + offset > 24 * 60 - 1:
+                    return jsonify({"status": "error", "message": "Plan 24:00'ü aşamaz — daha az kaydırın."}), 400
+                if offset < 0 and min(b["start"] for b in plan["blocks"]) + offset < 0:
+                    return jsonify({"status": "error", "message": "Plan 00:00'den önceye kaydırılamaz."}), 400
                 for b in plan["blocks"]:
                     b["start"] += offset
                     b["end"] += offset
@@ -966,10 +1051,10 @@ def block_metrics():
                     if "pages" in block:
                         h["pages"] = block.get("pages", 0)
             doc["plan"] = plan
-            _save_doc(doc)
+        _save_doc(doc)
     out = drawer(doc)
     out["status"] = "success"
-    out["plan"] = plan
+    out["plan"] = doc["plan"]
     return jsonify(out)
 
 
@@ -1262,7 +1347,14 @@ def catchup():
 
         if overdue:
             rank = {"red": 0, "yellow": 1, "green": 2}
-            scheduled_keys = {(s["subject"], s["topic"]) for s in doc.get("scheduled", [])}
+            sched = doc.setdefault("scheduled", [])
+            # Re-date scheduled entries whose day already passed (otherwise
+            # they stay in the queue forever, since they only merge on
+            # day == today).
+            for i, s in enumerate(sched):
+                if s.get("day") and s["day"] < today:
+                    s["day"] = _nth_school_day(today, 1 + (i % 3))
+            scheduled_keys = {(s["subject"], s["topic"]) for s in sched}
             ordered = [
                 it for it in sorted(overdue, key=lambda x: rank.get(x.get("confidence", "yellow"), 1))
                 if (it["subject"], it["topic"]) not in scheduled_keys
@@ -1270,9 +1362,8 @@ def catchup():
             byday = {}
             queued = []
             for i, it in enumerate(ordered):
-                offset = 1 + (i % 3)
-                day = _day_key(int(time.time()) + offset * 86400)
-                doc.setdefault("scheduled", []).append({
+                day = _nth_school_day(today, 1 + (i % 3))
+                sched.append({
                     "subject": it["subject"], "topic": it["topic"],
                     "day": day, "minutes": max(15, min(int(it.get("minutes") or 30), 60)),
                     "confidence": it.get("confidence", "yellow"),
@@ -1304,4 +1395,4 @@ def catchup():
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)
+    app.run(host="127.0.0.1", port=PORT, debug=False, threaded=True)
