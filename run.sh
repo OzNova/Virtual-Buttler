@@ -1,27 +1,26 @@
 #!/usr/bin/env bash
-# Virtual Butler one-click launcher.
+# Virtual Butler launcher (local-only, no auth).
+# Serves app.py on 127.0.0.1:5000. GEMINI_API_KEY is optional (fallback tier).
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# Load OPENAI_API_KEY from .env if present (and not already exported)
-if [ -z "${OPENAI_API_KEY:-}" ] && [ -f .env ]; then
+if [ -f .env ]; then
   # shellcheck disable=SC1091
   set -a; source .env; set +a
 fi
 
-if [ -z "${OPENAI_API_KEY:-}" ]; then
-  echo "OPENAI_API_KEY is not set."
-  echo "Create a .env file in this folder containing:"
-  echo '  OPENAI_API_KEY=sk-...'
-  echo "Then run ./run.sh again."
-  exit 1
-fi
-
-# Create venv on first run
-if [ ! -d venv ]; then
+PYBIN="python3"
+if [ -x "venv/bin/python" ]; then
+  PYBIN="venv/bin/python"
+elif [ ! -d venv ]; then
   echo "Creating virtual environment…"
   python3 -m venv venv
   venv/bin/pip install -r requirements.txt
+  PYBIN="venv/bin/python"
 fi
 
-exec venv/bin/python jarvis.py
+if [ -z "${GEMINI_API_KEY:-}" ]; then
+  echo "(info) GEMINI_API_KEY not set — Gemini fallback disabled, Ollama + snippets still work."
+fi
+
+exec "$PYBIN" app.py

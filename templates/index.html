@@ -732,8 +732,17 @@
         dateEl.textContent = now.toLocaleDateString(undefined, opts);
       }
 
+      function fetchWithTimeout(url, opts, ms) {
+        opts = opts || {};
+        ms = ms || 8000;
+        var ctrl = new AbortController();
+        var id = setTimeout(function () { ctrl.abort(); }, ms);
+        opts.signal = ctrl.signal;
+        return fetch(url, opts).finally(function () { clearTimeout(id); });
+      }
+
       function fetchTelemetry() {
-        fetch("/api/telemetry")
+        fetchWithTimeout("/api/telemetry", {}, 5000)
           .then(function (r) { return r.json(); })
           .then(function (d) {
             if (d.status !== "success" || !d.telemetry) return;
@@ -742,7 +751,7 @@
             setRing(ramProg, t.ram_percent);
             cpuVal.textContent = (t.cpu || 0) + "%";
             ramVal.textContent = (t.ram_percent || 0) + "%";
-            memDetail.innerHTML = "<span>Used</span><b>" + (t.ram_used_gb || 0) + " GB / " + (t.ram_total_gb || 0) + " GB</b>";
+            memDetail.textContent = "Used " + (t.ram_used_gb || 0) + " GB / " + (t.ram_total_gb || 0) + " GB";
             if (t.battery_percent != null) {
               battFill.style.width = t.battery_percent + "%";
               battPct.textContent = t.battery_percent + "%";
