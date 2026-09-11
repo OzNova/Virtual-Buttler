@@ -20,11 +20,18 @@ without breaking the working Flask app. Each phase is additive and demoable.
 - `POST /api/agent` (structured), `POST /api/agent/stream` (SSE token+result), `WS /ws/chat` via `decide()`, `GET /api/agent/status`.
 - `/api/command` stays deterministic for compat. Default `AGENT_LLM=off` (no keys).
 
-## Phase 3 — Voice pipeline (optional providers)
-- Abstractions: `STTProvider`, `TTSProvider`, `VAD`.
-- Default: Web Speech API (browser) + macOS `say`. Optional: Deepgram/Groq STT,
-  ElevenLabs/OpenAI TTS, Silero VAD, barge-in (stop-speak-on-interrupt).
-- Music ducking on speak start/stop (event bus).
+## Phase 3 — Voice pipeline (DONE, defaults need no keys)
+- `agent/voice.py`: `synthesize`/`transcribe`/`vad_speech`/`DuckingController`,
+  stdlib-only; Silero via lazy import with energy-VAD fallback (no `audioop`).
+- Defaults: browser Web Speech mic + macOS `say`; backend `/api/stt` 501 and
+  `/api/tts` `local` hint until a provider key is set.
+- Optional: `BUTLER_TTS=elevenlabs|openai`, `BUTLER_STT=groq|deepgram`
+  (urllib REST, base64 JSON — no `python-multipart` needed).
+- Ducking: `speak.start/stop` bus events dip system volume by
+  `BUTLER_DUCK_LEVEL` (default 25) when `BUTLER_DUCKING=1`.
+- Endpoints: `GET /api/voice/status`, `POST /api/tts`, `POST /api/stt`.
+- Barge-in: frontend mic already stops on submit; full interrupt-mid-speech
+  lands with Phase 5 audio element (backend events already emit).
 
 ## Phase 4 — Memory + knowledge
 - `agent/memory.py` gains vector backend: ChromaDB/Qdrant (lazy import, local dir).

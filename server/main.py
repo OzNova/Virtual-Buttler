@@ -30,6 +30,7 @@ except ImportError:  # pragma: no cover - import error surfaces at runtime with 
 
 from agent.decide import decide
 from agent.events import BUS
+from agent.voice import DuckingController, synthesize, transcribe, voice_status
 from agent.llm import gemini_model, mode, ollama_base, ollama_model
 from agent.memory import LongMemory, ShortMemory
 from agent.router import route
@@ -280,7 +281,23 @@ def execute(call_name: str, args: dict, raw: str) -> dict:
     return {"message": msg, "widget": widget}
 
 
-app = FastAPI(title="Butler Agent", version="0.1.0")
+app = FastAPI(title="Butler Agent", version="0.2.0")
+
+_DUCKING_ATTACHED = False
+
+
+def _ensure_ducking() -> None:
+    global _DUCKING_ATTACHED
+    if _DUCKING_ATTACHED:
+        return
+    try:
+        DuckingController().attach(BUS)
+        _DUCKING_ATTACHED = True
+    except Exception:
+        pass
+
+
+_ensure_ducking()
 
 
 @app.get("/")
@@ -391,6 +408,56 @@ def agent_stream(payload: AgentIn):
              "widget": out.get("widget"), "llm": mode()}) + "\n\n")
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+class TTSIn(BaseModel):
+    text: str
+    voice: str | None = None
+
+
+class STTIn(BaseModel):
+    audio_b64: str
+    mime: str = "audio/wav"
+
+
+@app.get("/api/voice/status")
+def voice_status_ep():
+    _ensure_ducking()
+    return {"status": "success", **voice_status()}
+
+
+@app.post("/api/tts")
+def tts_ep(payload: TTSIn):
+    text = (payload.text or "").strip()
+    if not text:
+        return JSONResponse({"status": "error", "message": "Empty text"}, status_code=400)
+    try:
+        out = synthesize(text)
+    except RuntimeError as e:
+        return {"status": "local", "message": str(e),
+                "hint": "Default TTS is macOS say + browser speechSynthesis (no key needed)."}
+    except Exception:
+        logger.debug("TTS failed", exc_info=True)
+        return JSONResponse({"status": "error", "message": "TTS failed"}, status_code=502)
+    return {"status": "success", **out}
+
+
+@app.post("/api/stt")
+def stt_ep(payload: STTIn):
+    if not (payload.audio_b64 or "").strip():
+        return JSONResponse({"status": "error", "message": "Empty audio"}, status_code=400)
+    try:
+        text = transcribe(payload.audio_b64, payload.mime or "audio/wav")
+    except RuntimeError as e:
+        return JSONResponse({"status": "error", "message": str(e),
+                             "hint": "Default STT is the browser Web Speech mic (no key needed)."},
+                            status_code=501)
+    except ValueError as e:
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
+    except Exception:
+        logger.debug("STT failed", exc_info=True)
+        return JSONResponse({"status": "error", "message": "STT failed"}, status_code=502)
+    return {"status": "success", "transcript": text}
 
 
 @app.get("/api/widgets")

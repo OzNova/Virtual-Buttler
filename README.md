@@ -119,5 +119,9 @@ python -m unittest discover -s tests -v
 - `WS /ws/chat` — chunked `token` + final `result` stream
 - Phase 2: `AGENT_LLM=off|ollama|gemini` (`GET /api/agent/status`), `POST /api/agent/stream` (SSE).
   Example: `AGENT_LLM=ollama OLLAMA_MODEL=llama3.2:1b python -m server.main` — "a bit quieter" → `system.volume{level:20}`; failures fall back to router
+- Phase 3: voice pipeline — defaults need no keys (browser mic + `say`).
+  `GET /api/voice/status`, `POST /api/tts`, `POST /api/stt` (base64 JSON).
+  Optional `BUTLER_TTS=elevenlabs|openai`, `BUTLER_STT=groq|deepgram`;
+  volume ducking on speak via event bus (`BUTLER_DUCKING=1`).
 - Compat REST (`/api/command`, `/api/telemetry`, …) mirrored from Flask
 - See `docs/ROADMAP.md` for Phases 2–5 (LLM calling, voice, RAG/vision, Tauri/HUD).
