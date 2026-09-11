@@ -104,3 +104,18 @@ dolar kaç tl                   tell me a joke
 ## License
 
 [MIT](LICENSE) — © 2026 Virtual Butler Project
+## Agent (Phase 1 — opt-in, local-only)
+
+Deterministic tool-calling seam alongside the Flask app. No new keys required.
+
+```bash
+pip install -r requirements-agent.txt
+python -m server.main   # FastAPI on http://127.0.0.1:8000
+python -m unittest discover -s tests -v
+```
+
+- `GET /api/tools` — 13 typed tools (JSON Schema, LangGraph-ready)
+- `POST /api/agent {"message":"…"}` — structured `{call, message, widget}`
+- `WS /ws/chat` — chunked `token` + final `result` stream
+- Compat REST (`/api/command`, `/api/telemetry`, …) mirrored from Flask
+- See `docs/ROADMAP.md` for Phases 2–5 (LLM calling, voice, RAG/vision, Tauri/HUD).

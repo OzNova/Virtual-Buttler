@@ -1,0 +1,5 @@
+fastapi>=0.110,<1
+uvicorn>=0.29,<1
+pydantic>=2,<3
+psutil>=5.9
+python-dotenv>=1.0
