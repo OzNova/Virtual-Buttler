@@ -60,10 +60,10 @@ Optional tweaks (all environment variables with sane defaults):
 | Variable         | Default                  | Purpose                          |
 |------------------|--------------------------|----------------------------------|
 | `GEMINI_API_KEY` | *(unset)*                | Gemini fallback tier API key     |
-| `GEMINI_MODEL`   | `gemini-3.6-flash`       | Gemini model name                |
+| `GEMINI_MODEL`   | `gemini-2.0-flash`       | Gemini model name                |
 | `OLLAMA_BASE`    | `http://localhost:11434` | Ollama endpoint                  |
 | `OLLAMA_MODEL`   | `llama3.2:1b`            | Preferred Ollama model           |
-| `OLLAMA_TIMEOUT` | `60`                     | Ollama request timeout (seconds) |
+| `OLLAMA_TIMEOUT` | `30`                     | Ollama request timeout (seconds) |
 
 ## Run
 
@@ -72,7 +72,11 @@ clean Chrome app-mode window), or:
 
 ```bash
 python3 app.py            # serves the Command Center at http://127.0.0.1:5000
+./run.sh                  # venv-aware launcher (same server)
+python3 jarvis.py "time"  # lightweight CLI client -> POST /api/command
 ```
+
+> Local-only by design: binds `127.0.0.1`, no auth. Do not expose to a network.
 
 ## Example commands
 

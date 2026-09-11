@@ -1,4 +1,4 @@
-"""JARVIS — macOS AI Assistant Backend.
+"""JARVIS — macOS AI Assistant Backend (local-only, no auth by design).
 
 Ultra-modern Flask REST backend with a typo-tolerant natural-language
 intent engine and native macOS system integration.
@@ -11,26 +11,34 @@ Caching is fully disabled via after_request so the UI always reflects the
 latest template/markup during development.
 """
 
-import os
-import re
-import json
-import html
-import time
-import random
+import collections
 import datetime
 import difflib
+import html
+import json
+import logging
+import os
+import pathlib
+import random
+import re
 import subprocess
-import urllib.parse
-import webbrowser
-import urllib.request
+import threading
+import time
 import urllib.error
+import urllib.parse
+import urllib.request
+import webbrowser
 import xml.etree.ElementTree as ET
+
+logger = logging.getLogger("jarvis")
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 try:
     from dotenv import load_dotenv
     load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
-except Exception:
-    pass
+except Exception:  # optional dep; .env is optional
+    logger.debug("python-dotenv not available", exc_info=True)
 
 from flask import Flask, render_template, request, jsonify
 
@@ -41,7 +49,10 @@ TTS_VOICE = os.getenv("TTS_VOICE", "Daniel")
 
 # Frontend-controlled TTS mute. When True, speak() skips the `say` command
 # entirely (the UI handles its own visual waveform cues).
+# Local-only app: no auth by design, server binds 127.0.0.1 (see __main__).
 VOICE_MUTED = {"muted": False}
+_VOICE_LOCK = threading.Lock()
+_SPEAK_MAX_CHARS = 400
 
 # Auto-reload templates from disk on every request during development.
 app.config["TEMPLATES_AUTO_RELOAD"] = True
@@ -55,7 +66,11 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 # falls back to whichever model the running instance actually has.
 OLLAMA_BASE = os.getenv("OLLAMA_BASE", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:1b")
-OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "60"))
+try:
+    OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "30"))
+except ValueError:
+    OLLAMA_TIMEOUT = 30.0
+OLLAMA_TIMEOUT = max(3.0, min(OLLAMA_TIMEOUT, 120.0))
 
 OLLAMA_SYSTEM_PROMPT = (
     "You are JARVIS, an ultra-smart, sleek macOS assistant built by OzNova. "
@@ -78,8 +93,7 @@ _OLLAMA_MODEL_CACHE = {"ts": 0.0, "model": None}
 
 
 def _ollama_model():
-    """Refresh every 60s: prefer OLLAMA_MODEL, else use whatever Ol"
-    "lama reports. Returns None handle-free when nothing is reachable."""
+    """Refresh every 60s: prefer OLLAMA_MODEL, else use whatever Ollama reports."""
     now = time.time()
     if now - _OLLAMA_MODEL_CACHE["ts"] < 60 and _OLLAMA_MODEL_CACHE["model"]:
         return _OLLAMA_MODEL_CACHE["model"]
@@ -103,23 +117,26 @@ def _ollama_model():
 # Short in-memory chat memory so JARVIS keeps user parameters (brand, color,
 # platform, task) across turns instead of re-asking what they were looking for.
 CONVO_HISTORY_MAX = 6
-CONVO_HISTORY = []  # list of ("user" | "jarvis", text) pairs, oldest first
+# deque(maxlen) + lock: Flask may serve requests on multiple threads.
+CONVO_HISTORY: collections.deque = collections.deque(maxlen=CONVO_HISTORY_MAX * 2)
+_CONVO_LOCK = threading.Lock()
 
 
 def _remember(user_turn, jarvis_turn):
     """Append a (user, JARVIS) turn-pair to the rolling conversation memory."""
-    if user_turn:
-        CONVO_HISTORY.append(("user", user_turn))
-    if jarvis_turn:
-        CONVO_HISTORY.append(("jarvis", jarvis_turn))
-    while len(CONVO_HISTORY) > CONVO_HISTORY_MAX * 2:
-        CONVO_HISTORY.pop(0)
+    with _CONVO_LOCK:
+        if user_turn:
+            CONVO_HISTORY.append(("user", user_turn))
+        if jarvis_turn:
+            CONVO_HISTORY.append(("jarvis", jarvis_turn))
 
 
 def _build_ollama_prompt(text):
     """Assemble the Ollama prompt from rolling history + the current turn."""
+    with _CONVO_LOCK:
+        history = list(CONVO_HISTORY)[-CONVO_HISTORY_MAX * 2:]
     turns = []
-    for role, msg in CONVO_HISTORY[-CONVO_HISTORY_MAX * 2:]:
+    for role, msg in history:
         turns.append(f"{'User' if role == 'user' else 'JARVIS'}: {msg}")
     turns.append(f"User: {text}")
     turns.append("JARVIS:")
@@ -170,9 +187,8 @@ def _needs_web_context(text):
 # Reads GEMINI_API_KEY from the environment. Set it in a local .env file
 # (git-ignored) or export it in the shell — never hardcode it in source.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-# NOTE: gemini-2.5-flash is decommissioned for new accounts (HTTP 404). The
-# working replacement on this key is gemini-3.6-flash.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+# Override via GEMINI_MODEL env if your key uses a different model id.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 # JARVIS persona injected as context for natural, on-brand answers.
@@ -200,29 +216,33 @@ def speak(text):
     """Speak text aloud in the background without blocking the response.
 
     Uses the built-in macOS `say` command so no extra Python packages are
-    required. Runs asynchronously; failures are silently ignored.
+    required. Runs asynchronously; failures are logged at debug level.
     """
-    if not text or VOICE_MUTED["muted"]:
+    with _VOICE_LOCK:
+        muted = VOICE_MUTED["muted"]
+    if not text or muted:
         return
+    clipped = (text or "")[:_SPEAK_MAX_CHARS]
     try:
         subprocess.Popen(
-            ["say", "-v", TTS_VOICE, text],
+            ["say", "-v", TTS_VOICE, clipped],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
     except Exception:
-        pass
+        logger.debug("speak() failed", exc_info=True)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _run(cmd):
+def _run(cmd, timeout=5):
     """Run a shell command list and return stripped stdout, or None."""
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, check=False).stdout.strip()
+        return subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=timeout).stdout.strip()
     except Exception:
+        logger.debug("_run failed: %r", cmd, exc_info=True)
         return None
 
 
@@ -236,7 +256,7 @@ def _fire_and_forget(cmd):
     try:
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
-        pass
+        logger.debug("_fire_and_forget failed: %r", cmd, exc_info=True)
 
 
 def _ratio(a, b):
@@ -258,6 +278,31 @@ def _alias_hit(text, alias):
         if _ratio(alias, token) >= 0.8:
             return True
     return False
+
+_HTTP_UA = "Mozilla/5.0 JARVIS/1.0"
+
+
+def _http_get_json(url, timeout=10):
+    """GET JSON with a short timeout + UA. Returns dict or {} on failure."""
+    req = urllib.request.Request(url, headers={"User-Agent": _HTTP_UA})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        logger.debug("GET JSON failed: %s", url, exc_info=True)
+        return {}
+
+
+def _http_get_text(url, timeout=10):
+    """GET raw text (for RSS). Returns str or '' on failure."""
+    req = urllib.request.Request(url, headers={"User-Agent": _HTTP_UA})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8")
+    except Exception:
+        logger.debug("GET text failed: %s", url, exc_info=True)
+        return ""
+
 
 
 # ---------------------------------------------------------------------------
@@ -356,35 +401,25 @@ COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_cu
 def _fetch_currency_rates():
     """Fetch USD/TRY and EUR/TRY plus BTC (USD + TRY) as a dict, or {}."""
     rates = {}
-    try:
-        for base in ("USD", "EUR"):
-
-            def _get(url):
-                req = urllib.request.Request(
-                    url, headers={"User-Agent": "Mozilla/5.0 JARVIS/1.0"})
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    return json.loads(resp.read().decode("utf-8"))
-
-            data = _get(ER_API_BASE + base)
-            if data.get("result") == "success":
+    for base in ("USD", "EUR"):
+        data = _http_get_json(ER_API_BASE + base, timeout=10)
+        if data.get("result") == "success":
+            try:
                 try_rate = data.get("rates", {}).get("TRY")
                 if try_rate:
                     rates[base + "/TRY"] = round(float(try_rate), 2)
-    except Exception:
-        pass
+            except (TypeError, ValueError):
+                logger.debug("bad FX payload for %s", base, exc_info=True)
 
+    data = _http_get_json(COINGECKO_URL, timeout=10)
+    btc = data.get("bitcoin", {}) if isinstance(data, dict) else {}
     try:
-        req = urllib.request.Request(
-            COINGECKO_URL, headers={"User-Agent": "Mozilla/5.0 JARVIS/1.0"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        btc = data.get("bitcoin", {})
         if "usd" in btc:
             rates["BTC/USD"] = round(float(btc["usd"]), 2)
         if "try" in btc:
             rates["BTC/TRY"] = round(float(btc["try"]), 0)
-    except Exception:
-        pass
+    except (TypeError, ValueError):
+        logger.debug("bad BTC payload", exc_info=True)
 
     return rates
 
@@ -484,7 +519,6 @@ def _snippet_is_vague(snippet, query):
     if len(words) < 6:
         return True
     # Drop leading "query ..." echoes, e.g. "X X X ..." repeated verbatim.
-    words_set = set(w.lower() for w in words)
     echo = sum(1 for w in words if w.lower() in query.lower().split())
     if len(words) >= 4 and echo > len(words) // 2:
         return True
@@ -913,12 +947,10 @@ def _spotify_action(action):
     labels = {
         "next": "Playing the next track, sir.",
         "previous": "Going back to the previous track, sir.",
-        "playpause": "Pausing the music, sir." if "pause" in "pause" else "Resuming the music, sir.",
+        # Can't know the resulting play/pause state; keep it neutral.
+        "playpause": "Toggling the music, sir.",
     }
     reply = labels[action]
-    if action == "playpause":
-        # Can't know the resulting state; keep it neutral.
-        reply = "Toggling the music, sir."
     speak(reply)
     return reply
 
@@ -1119,27 +1151,50 @@ def _handle_open_path(text):
 
 def _handle_create_item(text):
     """Create a file or folder on the Desktop in one execution."""
-    clean = (text or "").lower().strip()
+    original = (text or "").strip()
+    clean = original.lower()
     if not re.search(r"(create|make|mkdir|oluştur|olustur)", clean):
         return None
     m = re.search(
         r"(?:create|make|mkdir|oluştur|olustur)\s+(?:a |new |bir |yeni )?"
         r"(folder|directory|klasör|klasor|file|dosya)"
         r"(?:\s+(?:named|called|adında|adıyla|adli|adlı))?\s+[\"'`]?([^\"'`]+?)[\"'`]?\s*$",
-        clean)
+        original,
+        flags=re.IGNORECASE)
     if not m:
         return None
-    kind, name = m.group(1), m.group(2).strip()
-    path = os.path.join(os.path.expanduser("~/Desktop"), name.strip("/\\"))
+    kind = m.group(1).lower()
+    raw_name = m.group(2).strip()
+    # Local-only safety: confine creates to ~/Desktop, reject traversal.
+    name = raw_name.strip().strip("/\\").strip()
+    if not name or name in (".", "..") or "/" in name or "\\" in name or "\x00" in name:
+        reply = "I can't create that name \u2014 please use a simple folder or file name, sir."
+        speak(reply)
+        return reply
+    desktop = pathlib.Path(os.path.expanduser("~/Desktop")).resolve()
+    path = (desktop / name).resolve()
+    try:
+        path.relative_to(desktop)
+    except ValueError:
+        reply = "I can't create that name \u2014 please use a simple folder or file name, sir."
+        speak(reply)
+        return reply
+    if len(name) > 100:
+        reply = "That name is too long, sir."
+        speak(reply)
+        return reply
     try:
         if kind in ("file", "dosya"):
-            with open(path, "w") as fh:
-                fh.write("")
-            reply = f"Created the {kind} '{name}' on your desktop, sir."
+            if path.exists():
+                return None
+            path.write_text("", encoding="utf-8")
         else:
-            os.makedirs(path, exist_ok=True)
-            reply = f"Created the {kind} '{name}' on your desktop, sir."
+            path.mkdir(parents=False, exist_ok=False)
+        reply = f"Created the {kind} '{name}' on your desktop, sir."
+    except FileExistsError:
+        reply = f"'{name}' already exists on your desktop, sir."
     except Exception:
+        logger.debug("create item failed", exc_info=True)
         return None
     speak(reply)
     _remember(text, reply)
@@ -1162,11 +1217,21 @@ def _handle_open_domain(text):
     return reply
 
 
+_TERMINAL_BLOCKLIST = (
+    "rm -rf /", "mkfs", ":(){", "dd if=", "shutdown", "reboot",
+    "halt", "poweroff", "> /dev/sda", "diskutil erase",
+)
+
+
 def _handle_terminal_run(text):
-    """Execute a command inside macOS Terminal in one shot."""
+    """Execute a command inside macOS Terminal in one shot (local-only)."""
     clean = (text or "").lower().strip()
     if "terminal" not in clean:
         return None
+    if any(b in clean for b in _TERMINAL_BLOCKLIST):
+        reply = "I can't run that destructive command, sir."
+        speak(reply)
+        return reply
     m = re.search(r"\brun\b\s+([^,]+?)\s+\bin\b\s+(?:the\s+)?terminal\b", clean)
     or_ = re.search(r"\bin\b\s+(?:the\s+)?terminal\b\s*[,:]?\s*(?:run\s+)?([^,]+?)\s*$", clean)
     cmd = (m.group(1).strip() if m else (or_.group(1).strip() if or_ else ""))
@@ -1214,12 +1279,12 @@ def _handle_default_action(text):
 # ---------------------------------------------------------------------------
 
 def _system_report():
-    """Live CPU / RAM / battery telemetry."""
+    """Live CPU / RAM / battery telemetry (non-blocking)."""
     try:
         import psutil
     except Exception:
         return "System telemetry is momentarily unavailable, sir."
-    cpu = psutil.cpu_percent(interval=0.5)
+    cpu = psutil.cpu_percent(interval=None)
     mem = psutil.virtual_memory()
     reply = f"System Telemetry — CPU: {cpu}% | RAM: {mem.percent}% ({mem.used // (1024 ** 3)} GB used)"
     battery = psutil.sensors_battery()
@@ -1440,7 +1505,8 @@ def generate_smart_response(text):
     path_reply = _handle_open_path(clean)
     if path_reply:
         return path_reply
-    create_reply = _handle_create_item(clean)
+    # Preserve original casing for filenames (clean is lowercased).
+    create_reply = _handle_create_item(stripped)
     if create_reply:
         return create_reply
 
@@ -1507,13 +1573,17 @@ def generate_smart_response(text):
 
     # ── Direct web search fallback (vague snippet or none) ──────────────
     url = "https://www.google.com/search?q=" + urllib.parse.quote(clean)
-    webbrowser.open(url)
+    try:
+        opened = webbrowser.open(url)
+    except Exception:
+        logger.debug("webbrowser.open failed", exc_info=True)
+        opened = False
+    if opened is False:
+        # Browser unavailable (headless/SSH): use a polished canned reply.
+        reply = random.choice(FALLBACK_RESPONSES)
+        speak(reply)
+        return reply
     reply = f"Opening search results for '{clean.title()}' in your browser, sir."
-    speak(reply)
-    return reply
-
-    # ── Polished fallback (never a raw echo) ────────────────────────────
-    reply = random.choice(FALLBACK_RESPONSES)
     speak(reply)
     return reply
 
@@ -1527,14 +1597,22 @@ def index():
     return render_template("index.html")
 
 
+MAX_COMMAND_CHARS = 1000
+
+
 @app.route("/api/command", methods=["POST"])
 def handle_command():
-    """Accept {"command": "text"} and return {"status": "success", "message": "..."}."""
+    """Accept {"command": "text"} and return {"status": "success", "message": "..."}.
+
+    Local-only by design (binds 127.0.0.1): no auth, no rate-limit.
+    """
     data = request.get_json(silent=True) or {}
     raw_cmd = (data.get("command") or "").strip()
 
     if not raw_cmd:
         return jsonify({"status": "error", "message": "Empty command"}), 400
+    if len(raw_cmd) > MAX_COMMAND_CHARS:
+        return jsonify({"status": "error", "message": "Command too long"}), 400
 
     response_text = generate_smart_response(raw_cmd)
     return jsonify({"status": "success", "message": response_text})
@@ -1566,11 +1644,14 @@ def voice_mute():
     """Get/set the TTS mute flag. POST {"muted": bool} sets it explicitly."""
     if request.method == "POST":
         data = request.get_json(silent=True) or {}
-        if isinstance(data.get("muted"), bool):
-            VOICE_MUTED["muted"] = data["muted"]
-        else:
-            VOICE_MUTED["muted"] = not VOICE_MUTED["muted"]
-    return jsonify({"status": "success", "muted": VOICE_MUTED["muted"]})
+        with _VOICE_LOCK:
+            if isinstance(data.get("muted"), bool):
+                VOICE_MUTED["muted"] = data["muted"]
+            else:
+                VOICE_MUTED["muted"] = not VOICE_MUTED["muted"]
+    with _VOICE_LOCK:
+        muted = VOICE_MUTED["muted"]
+    return jsonify({"status": "success", "muted": muted})
 
 
 ALLOWED_MEDIA_ACTIONS = ("playpause", "next", "previous")
@@ -1592,4 +1673,6 @@ def media():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    # Local-only: loopback bind, no auth (per operator request).
+    port = int(os.getenv("PORT", "5000"))
+    app.run(host="127.0.0.1", port=port, debug=False)
