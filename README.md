@@ -1,136 +1,147 @@
-# JARVIS — Virtual Butler
+# Butler — Virtual-Buttler
 
-A self-hosted macOS assistant with a glassmorphic **Command Center** web UI and a strict
-**action-over-advice** execution policy. Say (or type) a request: JARVIS performs real
-system actions — opening apps, folders, domains and products, controlling volume, running
-commands in Terminal and creating files — then confirms with a single spoken line. Pure
-conversation is handled by a local-first hybrid brain instead.
+Local-only macOS assistant with an **action-over-advice** policy: commands are
+*executed* (apps, folders, volume, Terminal, files, media, smart home), never
+answered with instructions. Conversation goes through a local-first brain.
 
-## Features
+> Local-only by design: everything binds `127.0.0.1`, no auth. Do not expose
+> to a network.
 
-- **System Action Engine** — unified action/conversation classifier. Action requests are
-  *executed*, never answered with step-by-step advice:
-  - Launch apps & open websites (`open youtube`, `open spotify`)
-  - Open folders, files & absolute paths (`open the downloads folder`)
-  - Create files/folders on the Desktop (`create a folder named Reports`)
-  - Control system volume (`set volume to 40`, `volume up`)
-  - Mute / unmute audio, lock the screen, empty the Trash, take screenshots
-  - Run commands in Terminal (`run ls -la in the terminal`), open bare domains
-    (`open github.com`), Spotify media controls (next/previous/play-pause)
-  - Residual actions always land: playback asks → YouTube, photo asks → Google Images,
-    anything else → direct web search
-- **Hybrid Brain** — Ollama (local, primary) → Gemini (fallback) → web snippet →
-  direct search. Only non-action conversation reaches the LLM; queries needing live
-  knowledge (news, weather, prices) skip straight to the web-capable tier.
-- **Product & shopping search** — `brown iphone 13 case trendyol`,
-  `mechanical keyboard amazon`, `nike shoes hepsiburada`, `iphone ebay`,
-  `samsung s24 google shopping` — builds the correct search URL per platform and opens it.
-- **Live data intents** — breaking news, currency exchange (USD/EUR/TRY), Bitcoin
-  (USD/TRY) via CoinGecko.
-- **Video intents** — `latest {topic} video`, `newest {topic} video`, `open a {topic} video`.
-- **Conversation memory** — keeps up to 6 recent turns so context carries across prompts
-  ("…for my girlfriend? she likes pink").
-- **Telemetry + voice mute** — real-time CPU/RAM/battery endpoint and a voice-mute toggle.
-
-## Requirements
-
-- **Python 3.10+** (developed on 3.14)
-- **macOS** — system actions use `open`, AppleScript and `osascript`
-- [Ollama](https://ollama.com) *(optional)* — used as the primary chat tier when running
-  (`OLLAMA_BASE` default `http://localhost:11434`). If the configured model isn't
-  installed, the first installed model is auto-selected.
-- Good-quality headphones/mic help voice recognition.
-
-## Setup
+## Run it
 
 ```bash
 git clone https://github.com/OzNova/Virtual-Buttler.git
 cd Virtual-Buttler
-
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# API key for the Gemini fallback tier (optional but recommended)
-printf 'GEMINI_API_KEY=YOUR_KEY\n' > .env
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt          # Flask UI + CLI (zero Node/Rust)
 ```
 
-Optional tweaks (all environment variables with sane defaults):
+| Mode | Command | What you get |
+| ---- | ------- | ------------ |
+| Classic UI | `python3 app.py` or `./run.sh` or double-click `launch_jarvis.command` | Apple-style Command Center at `http://127.0.0.1:5000` |
+| CLI | `python3 jarvis.py "what time is it"` | Stdlib client → `POST /api/command` (also REPL/pipe mode) |
+| Agent API | `pip install -r requirements-agent.txt && python -m server.main` | FastAPI on `http://127.0.0.1:8000` — 21 typed tools, WS/SSE streaming |
+| HUD | `cd hud && npm install && npm run dev` (+ agent API above) | Next.js HUD at `http://localhost:3000` — orb, charts, widget cards |
+| Desktop | `cargo tauri dev` in `src-tauri/` | Tray + `Cmd/Ctrl+Shift+Space` shell around the HUD |
 
-| Variable         | Default                  | Purpose                          |
-|------------------|--------------------------|----------------------------------|
-| `GEMINI_API_KEY` | *(unset)*                | Gemini fallback tier API key     |
-| `GEMINI_MODEL`   | `gemini-2.0-flash`       | Gemini model name                |
-| `OLLAMA_BASE`    | `http://localhost:11434` | Ollama endpoint                  |
-| `OLLAMA_MODEL`   | `llama3.2:1b`            | Preferred Ollama model           |
-| `OLLAMA_TIMEOUT` | `30`                     | Ollama request timeout (seconds) |
-
-## Run
-
-Double-click `launch_jarvis.command` (starts the server if needed and opens the UI in a
-clean Chrome app-mode window), or:
-
-```bash
-python3 app.py            # serves the Command Center at http://127.0.0.1:5000
-./run.sh                  # venv-aware launcher (same server)
-python3 jarvis.py "time"  # lightweight CLI client -> POST /api/command
-```
-
-> Local-only by design: binds `127.0.0.1`, no auth. Do not expose to a network.
-
-## Example commands
+## Try
 
 ```
 open the downloads folder      create a folder named Reports
-set volume to 40               volume up
-run ls -la in the terminal     open github.com
-play despacito                 show me a picture of a fox
-brown iphone 13 case trendyol  mechanical keyboard amazon
-latest taylor swift video      what's the weather in Paris?
-dolar kaç tl                   tell me a joke
+set volume to 40               run ls -la in the terminal
+open github.com                next song
+latest taylor swift video      show me a picture of a fox
+brown iphone 13 case trendyol  dolar kaç tl
+summarize the Q3 budget pdf    what is my next meeting?
+turn on the living room light  should I focus now?
 ```
 
-## REST API
+## How it works
 
-| Endpoint          | Method(s)        | Description                                 |
-|-------------------|------------------|---------------------------------------------|
-| `/api/command`    | `POST`           | Send `{"command": "…"}` → `{"message", …}`  |
-| `/api/ping`       | `GET`            | Health check (`{"status":"success"}`)       |
-| `/api/telemetry`  | `GET`            | CPU / RAM / battery report                  |
-| `/api/voice-mute` | `GET`/`POST`     | Get or set the voice-mute flag              |
-| `/api/media`      | `POST`           | Spotify media controls (`next/prev/play`)   |
-| `/api/broadcast`  | `POST`           | Broadcast a message to the UI               |
+```
+templates/index.html / hud/ / jarvis.py
+        │  REST / WS (loopback)
+        ▼
+Flask app.py (:5000, legacy)  ·  FastAPI server/main.py (:8000, agent)
+        │                              │  decide() → execute()
+        │                              ▼
+        │                    agent/{router,decide,llm,tools,memory,
+        │                           knowledge,vision,focus,home,voice,events}
+        ▼                              ▼
+macOS: open / osascript / say / screencapture · web · Ollama/Gemini (opt-in)
+```
+
+- **Decision vs execution split:** `agent/router.py` (deterministic) returns a
+  `ToolCall`; `agent/decide.py` tries the LLM first when `AGENT_LLM` is set,
+  else the router. `server/main.py:execute()` performs it. Same shape a future
+  LangGraph/PydanticAI caller can produce.
+- **Fallbacks everywhere:** LLM fail → router; vector DB absent → keyword
+  search; vision key absent → screenshot path + hint; calendar/home unconfigured
+  → hint, never crash.
+- **Safety rails (not auth):** Desktop confinement, terminal destructive
+  blocklist, `MAX_COMMAND_CHARS=1000`, TTS truncation, doc-path allowlist.
+
+## API (FastAPI :8000; Flask :5000 mirrors the `*` rows)
+
+| Endpoint | Method | Description |
+| -------- | ------ | ----------- |
+| `/` | `GET` | UI (`templates/index.html`) / service info |
+| `/api/command` * | `POST` | `{"command":"…"}` → `{"message",…}` (deterministic) |
+| `/api/agent` | `POST` | `{"message":"…"}` → `{call, message, widget, llm}` (LLM when enabled) |
+| `/api/agent/stream` | `POST` | SSE `token` chunks + `result` |
+| `/api/agent/status` | `GET` | `{llm, ollama_base/model, gemini_model, gemini_key_set}` |
+| `/api/tools` | `GET` | 21 tool schemas (JSON Schema) |
+| `/api/ping` * | `GET` | Health check |
+| `/api/telemetry` * | `GET` | CPU / RAM / battery + clock |
+| `/api/voice-mute` * | `GET`/`POST` | TTS mute flag |
+| `/api/media` * | `POST` | Spotify `next/previous/playpause` |
+| `/api/broadcast` * | `POST` | Speak a message via TTS |
+| `/api/voice/status` | `GET` | `{tts, stt, vad, ducking, keys_set}` |
+| `/api/tts` | `POST` | `{"text"}` → `{audio_b64, mime}` or `local` hint |
+| `/api/stt` | `POST` | `{"audio_b64", "mime"}` → `{transcript}` or `501` hint |
+| `/api/memory/recall` | `POST` | Past conversation notes |
+| `/api/docs/search` | `POST` | Allowlisted document search |
+| `/api/docs/summarize` | `POST` | Extractive doc summary |
+| `/api/vision/capture` | `POST` | Screenshot (+ Gemini describe when key set) |
+| `/api/calendar/next` | `GET` | Upcoming events (ICS/icalBuddy) |
+| `/api/focus` | `GET` | Focus-mode suggestion near deep-work blocks |
+| `/api/home/state` | `POST` | Home Assistant entity state |
+| `/api/home/call` | `POST` | Home Assistant service call |
+| `/api/widgets` | `GET` | HUD card data (`?kind=telemetry`) |
+| `/api/hud/state` | `GET` | Combined boot payload for the HUD |
+| `/ws/chat` | `WS` | `{command}` → `token`* + `result` |
+| `/ws/audio` | `WS` | 4Hz `{level, speaking, cpu}` for the orb |
+
+## Tools (21)
+
+`system.telemetry`, `system.time`, `system.volume`, `system.mute` · `media.spotify` · `apps.open` ·
+`folders.open` · `files.create` · `web.open_domain`, `web.search` · `shop.search` ·
+`terminal.run` · `memory.recall` · `docs.search`, `docs.summarize` · `vision.capture` ·
+`calendar.next` · `focus.check` · `home.state`, `home.call` · `chat.reply`
+
+## Configure (all optional — see `.env.example`)
+
+| Variable | Default | Purpose |
+| -------- | ------- | ------- |
+| `GEMINI_API_KEY` / `GEMINI_MODEL` | unset / `gemini-2.0-flash` | Gemini chat + vision fallback |
+| `OLLAMA_BASE` / `OLLAMA_MODEL` / `OLLAMA_TIMEOUT` | `http://localhost:11434` / `llama3.2:1b` / `30` | Local chat tier |
+| `AGENT_LLM` | `off` | `off` \| `ollama` \| `gemini` tool-calling |
+| `TTS_VOICE` | `Daniel` | macOS `say` voice |
+| `BUTLER_TTS` / `BUTLER_STT` | `say` / `off` | `elevenlabs`\|`openai` / `groq`\|`deepgram` with keys |
+| `ELEVENLABS_API_KEY` / `OPENAI_API_KEY` / `GROQ_API_KEY` / `DEEPGRAM_API_KEY` | unset | Voice providers |
+| `BUTLER_DUCKING` / `BUTLER_DUCK_LEVEL` | `1` / `25` | Volume dip while speaking |
+| `BUTLER_DOC_PATHS` / `BUTLER_DOC_INDEX` / `BUTLER_VECTOR` | unset / `data/docs.jsonl` / unset | Doc allowlist (`:`-separated), index, `chroma` opt-in |
+| `BUTLER_ICS_PATHS` / `BUTLER_FOCUS_WINDOW_MIN` | unset / `30` | Calendar `.ics` allowlist, focus window |
+| `HASS_URL` / `HASS_TOKEN` | unset | Home Assistant bridge |
+| `BUTLER_MEMORY` | `data/memory.jsonl` | Long-term notes file |
+| `PORT` / `AGENT_PORT` | `5000` / `8000` | Flask / FastAPI ports |
+| `JARVIS_BACKEND` | `http://127.0.0.1:5000` | CLI target |
+
+## Layout
+
+```
+app.py  jarvis.py  run.sh  launch_jarvis.command   # classic (Flask :5000)
+agent/  tools router decide llm memory knowledge vision focus home voice events
+server/main.py                                      # FastAPI :8000
+templates/index.html                                # zero-dep Apple UI
+hud/  app/ components/ lib/                        # Next.js HUD (:3000)
+src-tauri/                                          # tray + hotkey shell
+tests/  test_agent test_llm test_voice test_world test_hud
+docs/ROADMAP.md
+```
+
+## Test
+
+```bash
+python -m unittest discover -s tests -v   # 47 tests, stdlib-heavy, mocked OS/network
+```
+
+## Status
+
+Phases 1–5 done (see `docs/ROADMAP.md`): tool registry → LLM calling → voice →
+knowledge/vision/home → HUD/Tauri scaffold. Remaining manual steps: `npm install`,
+`cargo tauri icon`, provider keys, Apple signing.
 
 ## License
 
 [MIT](LICENSE) — © 2026 Virtual Butler Project
-## Agent (Phase 1 — opt-in, local-only)
-
-Deterministic tool-calling seam alongside the Flask app. No new keys required.
-
-```bash
-pip install -r requirements-agent.txt
-python -m server.main   # FastAPI on http://127.0.0.1:8000
-python -m unittest discover -s tests -v
-```
-
-- `GET /api/tools` — 13 typed tools (JSON Schema, LangGraph-ready)
-- `POST /api/agent {"message":"…"}` — structured `{call, message, widget}`
-- `WS /ws/chat` — chunked `token` + final `result` stream
-- Phase 2: `AGENT_LLM=off|ollama|gemini` (`GET /api/agent/status`), `POST /api/agent/stream` (SSE).
-  Example: `AGENT_LLM=ollama OLLAMA_MODEL=llama3.2:1b python -m server.main` — "a bit quieter" → `system.volume{level:20}`; failures fall back to router
-- Phase 3: voice pipeline — defaults need no keys (browser mic + `say`).
-  `GET /api/voice/status`, `POST /api/tts`, `POST /api/stt` (base64 JSON).
-  Optional `BUTLER_TTS=elevenlabs|openai`, `BUTLER_STT=groq|deepgram`;
-  volume ducking on speak via event bus (`BUTLER_DUCKING=1`).
-- Compat REST (`/api/command`, `/api/telemetry`, …) mirrored from Flask
-- See `docs/ROADMAP.md` for Phases 2–5 (LLM calling, voice, RAG/vision, Tauri/HUD).
-- Phase 4: knowledge/vision/home — all opt-in, no required deps.
-  `BUTLER_DOC_PATHS` allowlist → `/api/docs/search|summarize`;
-  `/api/vision/capture` (Gemini describe when key set), `/api/calendar/next`,
-  `/api/focus`, `/api/home/state|call` (`HASS_URL`+token). 21 tools total.
-- Phase 5: HUD + desktop scaffold (optional runtimes).
-  `cd hud && npm install && npm run dev` (:3000) + `python -m server.main` (:8000).
-  `GET /api/hud/state`, `WS /ws/audio`, Recharts telemetry, R3F orb, widget cards.
-  `cargo tauri dev` in `src-tauri/` for tray + ⌘⇧Space shell.
-  Flask `templates/index.html` stays the zero-dependency fallback.
