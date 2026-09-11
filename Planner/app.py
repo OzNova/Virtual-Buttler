@@ -70,6 +70,14 @@ PERIOD_SLOTS = [
     (800, 850, "P6"), (855, 905, "P7"), (910, 930, "P8"),
 ]
 
+# Weekend study programme (editable): subjects worked on Saturday/Sunday.
+# Planned like school days: the planner prioritises subjects of the current
+# weekend day, then the next day of the programme / next school day.
+WEEKEND_PROGRAM = {
+    5: ["MATH", "ENG", "PHY", "TUR", "GER"],            # Cumartesi
+    6: ["BIO", "CHE", "HIS", "GEO", "DT", "ECL"],       # Pazar
+}
+
 # Timetable code -> accepted subject names (match planner topic subjects).
 SUBJECT_ALIASES = {
     "MATH": ["math", "mathematics", "matematik"],
@@ -407,30 +415,32 @@ def _weekday_short(daykey):
 
 def _day_status(daykey):
     d = datetime.strptime(daykey, "%Y-%m-%d")
-    if d.weekday() >= 5:
-        return "weekend", "Hafta sonu"
     if daykey in NO_SCHOOL_DAYS:
         return "holiday", NO_SCHOOL_DAYS[daykey]
     for start, end, label in NO_SCHOOL_RANGES:
         if start <= daykey <= end:
             return "holiday", label
+    if d.weekday() >= 5:
+        return "weekend", "Hafta sonu"
     return "school", "Okul günü"
 
 
 def _subjects_for_day(daykey):
     d = datetime.strptime(daykey, "%Y-%m-%d")
     status, label = _day_status(daykey)
+    if status == "weekend":
+        return WEEKEND_PROGRAM.get(d.weekday(), []), status, label
     if status != "school":
         return [], status, label
     return TIMETABLE.get(d.weekday(), []), status, label
 
 
-def _next_school_day(daykey, step=1):
+def _next_program_day(daykey, step=1):
     cur = datetime.strptime(daykey, "%Y-%m-%d")
     for _ in range(40):
         cur += timedelta(days=step)
         key = cur.strftime("%Y-%m-%d")
-        if _day_status(key)[0] == "school":
+        if _subjects_for_day(key)[0]:
             return key
     return daykey
 
@@ -469,7 +479,7 @@ def _school_digest(day_key):
     d = datetime.strptime(day_key, "%Y-%m-%d")
     status, label = _day_status(day_key)
     subjects, _, _ = _subjects_for_day(day_key)
-    next_key = _next_school_day(day_key)
+    next_key = _next_program_day(day_key)
     next_subjects = _subjects_for_day(next_key)[0]
     return {
         "academic_year": ACADEMIC_YEAR,
@@ -482,6 +492,10 @@ def _school_digest(day_key):
         "lunch": f"{_hhmm(LUNCH[0])}-{_hhmm(LUNCH[1])}",
         "subjects_today": subjects,
         "subjects_next_day": next_subjects,
+        "weekend_program": {
+            "sat": WEEKEND_PROGRAM.get(5, []),
+            "sun": WEEKEND_PROGRAM.get(6, []),
+        },
         "periods": _period_table(d.weekday()),
     }
 
@@ -657,7 +671,7 @@ def build_plan(topics, start, end, duration_h, mode, criterion, now=None):
     today_key = _day_key(now_ts)
     day_status, day_label = _day_status(today_key)
     today_subjects, _, _ = _subjects_for_day(today_key)
-    next_key = _next_school_day(today_key)
+    next_key = _next_program_day(today_key)
     tomorrow_subjects, _, _ = _subjects_for_day(next_key)
 
     # School hours 08:00-15:30 are fixed non-study blocks: on a school day,
@@ -787,11 +801,11 @@ def build_plan(topics, start, end, duration_h, mode, criterion, now=None):
         note_parts.append("Sığmayan: " + ", ".join(dropped))
     if school_clamped:
         note_parts.append("🏫 Okul sonrasına alındı (15:30 sonrası)")
-    if day_status == "school" and today_subjects:
+    if day_status in ("school", "weekend") and today_subjects:
         tsub = ", ".join(today_subjects)
         nsub = ", ".join(tomorrow_subjects) if tomorrow_subjects else "—"
         note_parts.append(f"📚 Bugün: {tsub} · Yarın: {nsub}")
-    if day_status in ("holiday", "weekend"):
+    if day_status == "holiday":
         note_parts.append(f"🌤 {day_label} — tüm gün serbest")
 
     plan = {
