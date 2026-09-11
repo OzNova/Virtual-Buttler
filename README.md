@@ -125,3 +125,7 @@ python -m unittest discover -s tests -v
   volume ducking on speak via event bus (`BUTLER_DUCKING=1`).
 - Compat REST (`/api/command`, `/api/telemetry`, …) mirrored from Flask
 - See `docs/ROADMAP.md` for Phases 2–5 (LLM calling, voice, RAG/vision, Tauri/HUD).
+- Phase 4: knowledge/vision/home — all opt-in, no required deps.
+  `BUTLER_DOC_PATHS` allowlist → `/api/docs/search|summarize`;
+  `/api/vision/capture` (Gemini describe when key set), `/api/calendar/next`,
+  `/api/focus`, `/api/home/state|call` (`HASS_URL`+token). 21 tools total.

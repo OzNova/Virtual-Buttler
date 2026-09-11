@@ -272,6 +272,99 @@ def execute(call_name: str, args: dict, raw: str) -> dict:
         speak(msg)
         return {"message": msg, "widget": widget}
 
+    if name == "memory.recall":
+        from agent.memory import LongMemory
+        hits = LONG.recall(a.get("query", raw), limit=3)
+        if not hits:
+            msg = "I don't have notes on that yet, sir."
+        else:
+            top = hits[0]
+            msg = f"From my notes: you asked '{top.get('user', '')[:120]}' — I replied '{top.get('assistant', '')[:160]}', sir."
+        speak(msg)
+        return {"message": msg, "widget": {"kind": "memory", "hits": len(hits)}}
+
+    if name == "docs.search":
+        from agent.knowledge import search_docs
+        hits = search_docs(a.get("query", raw), limit=3)
+        if not hits:
+            msg = "No matching documents. Set BUTLER_DOC_PATHS to index a folder, sir."
+        else:
+            msg = f"Top match: {hits[0]['path']} — {hits[0]['snippet'][:200]}, sir."
+        speak(msg)
+        SHORT.add("user", raw)
+        SHORT.add("jarvis", msg)
+        return {"message": msg, "widget": {"kind": "docs", "hits": hits}}
+
+    if name == "docs.summarize":
+        from agent.knowledge import summarize_doc
+        res = summarize_doc(a.get("query", raw))
+        if not res:
+            msg = "No matching documents. Set BUTLER_DOC_PATHS to index a folder, sir."
+            speak(msg)
+            return {"message": msg, "widget": {"kind": "docs"}}
+        msg = f"Summary of {res['path']}: {res['summary']}, sir."
+        speak(msg)
+        SHORT.add("user", raw)
+        SHORT.add("jarvis", msg)
+        return {"message": msg, "widget": {"kind": "docs", "path": res["path"]}}
+
+    if name == "vision.capture":
+        from agent.vision import capture_screen, describe_image
+        cap = capture_screen()
+        if not cap.get("ok"):
+            msg = "I couldn't capture the screen, sir."
+            speak(msg)
+            return {"message": msg, "widget": {"kind": "vision"}}
+        desc = describe_image(cap["path"], (a.get("question") or raw)[:300])
+        if desc.get("ok"):
+            msg = f"On screen: {desc['text'][:400]}, sir."
+        else:
+            msg = f"Screenshot saved to {cap['path']}. {desc.get('hint', '')} sir.".strip()
+        speak(msg)
+        return {"message": msg, "widget": {"kind": "vision", "path": cap["path"]}}
+
+    if name == "calendar.next":
+        from agent.focus import upcoming
+        data = upcoming()
+        if not data.get("ok"):
+            msg = f"No calendar source. {data.get('hint', '')} sir."
+            speak(msg)
+            return {"message": msg, "widget": {"kind": "calendar"}}
+        evs = data.get("events", [])[:3]
+        msg = ("Up next: " + "; ".join(e.get("title", "") for e in evs) + ", sir.") if evs else "Nothing upcoming, sir."
+        speak(msg)
+        return {"message": msg, "widget": {"kind": "calendar", "events": evs}}
+
+    if name == "focus.check":
+        from agent.focus import focus_check
+        res = focus_check()
+        msg = res.get("suggestion") or "No focus block starting soon, sir."
+        if not res.get("suggest"):
+            msg = "No focus block starting soon, sir."
+        speak(msg)
+        return {"message": msg, "widget": {"kind": "focus", "suggest": res.get("suggest", False)}}
+
+    if name == "home.state":
+        from agent.home import get_state
+        res = get_state(a.get("entity_id", ""))
+        if not res.get("ok"):
+            msg = f"Smart home unavailable. {res.get('hint', res.get('error', ''))} sir.".strip()
+        else:
+            msg = f"{a.get('entity_id')} is {res.get('state')}, sir."
+        speak(msg)
+        return {"message": msg, "widget": {"kind": "home"}}
+
+    if name == "home.call":
+        from agent.home import call_service
+        res = call_service(a.get("domain", ""), a.get("service", ""),
+                           {"entity_id": a.get("entity_id")} if a.get("entity_id") else {})
+        if not res.get("ok"):
+            msg = f"Smart home unavailable. {res.get('hint', res.get('error', ''))} sir.".strip()
+        else:
+            msg = "Done, sir."
+        speak(msg)
+        return {"message": msg, "widget": {"kind": "home"}}
+
     # chat.reply + unknown: deterministic Phase 1 (LLM plugs in Phase 2)
     msg = decision_speak or "Understood, sir."
     speak(msg)
@@ -458,6 +551,79 @@ def stt_ep(payload: STTIn):
         logger.debug("STT failed", exc_info=True)
         return JSONResponse({"status": "error", "message": "STT failed"}, status_code=502)
     return {"status": "success", "transcript": text}
+
+
+class RecallIn(BaseModel):
+    query: str
+
+
+class DocsIn(BaseModel):
+    query: str
+
+
+class VisionIn(BaseModel):
+    question: str = "What is on screen?"
+
+
+class HomeStateIn(BaseModel):
+    entity_id: str
+
+
+class HomeCallIn(BaseModel):
+    domain: str
+    service: str
+    entity_id: str | None = None
+
+
+@app.post("/api/memory/recall")
+def memory_recall(payload: RecallIn):
+    out = execute("memory.recall", {"query": payload.query}, payload.query)
+    return {"status": "success", **out}
+
+
+@app.post("/api/docs/search")
+def docs_search(payload: DocsIn):
+    out = execute("docs.search", {"query": payload.query}, payload.query)
+    return {"status": "success", **out}
+
+
+@app.post("/api/docs/summarize")
+def docs_summarize(payload: DocsIn):
+    out = execute("docs.summarize", {"query": payload.query}, payload.query)
+    return {"status": "success", **out}
+
+
+@app.post("/api/vision/capture")
+def vision_capture(payload: VisionIn):
+    out = execute("vision.capture", {"question": payload.question}, payload.question)
+    return {"status": "success", **out}
+
+
+@app.get("/api/calendar/next")
+def calendar_next():
+    out = execute("calendar.next", {}, "what is next on my calendar?")
+    return {"status": "success", **out}
+
+
+@app.get("/api/focus")
+def focus_ep():
+    out = execute("focus.check", {}, "should I focus now?")
+    return {"status": "success", **out}
+
+
+@app.post("/api/home/state")
+def home_state(payload: HomeStateIn):
+    out = execute("home.state", {"entity_id": payload.entity_id}, f"is {payload.entity_id} on?")
+    return {"status": "success", **out}
+
+
+@app.post("/api/home/call")
+def home_call(payload: HomeCallIn):
+    args = {"domain": payload.domain, "service": payload.service}
+    if payload.entity_id:
+        args["entity_id"] = payload.entity_id
+    out = execute("home.call", args, f"{payload.service} {payload.entity_id or ''}")
+    return {"status": "success", **out}
 
 
 @app.get("/api/widgets")

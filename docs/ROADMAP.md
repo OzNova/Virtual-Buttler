@@ -33,12 +33,20 @@ without breaking the working Flask app. Each phase is additive and demoable.
 - Barge-in: frontend mic already stops on submit; full interrupt-mid-speech
   lands with Phase 5 audio element (backend events already emit).
 
-## Phase 4 — Memory + knowledge
-- `agent/memory.py` gains vector backend: ChromaDB/Qdrant (lazy import, local dir).
-- Index `~/Documents` (opt-in path allowlist). `summarize_pdf`, `recall_notes` tools.
-- Vision: `capture_screen()` tool -> Vision LLM (Gemini/GPT-4o, key required).
-- Proactive: calendar hook (macOS Calendar read-only) + focus-mode suggestion event.
-- Smart home: MQTT/Home Assistant bridge (opt-in `HASS_URL`+token, local only).
+## Phase 4 — Memory + knowledge (DONE, all opt-in, no required deps)
+- `agent/knowledge.py`: `BUTLER_DOC_PATHS` allowlist (.txt/.md native, .pdf lazy
+  pypdf), `data/docs.jsonl` index, keyword search + extractive summary;
+  `BUTLER_VECTOR=chroma` uses lazy chromadb with keyword fallback.
+- Tools: `memory.recall`, `docs.search`, `docs.summarize` (+ router patterns).
+- `agent/vision.py`: `screencapture` capture + Gemini describe when
+  `GEMINI_API_KEY` set, else path + hint. Tool `vision.capture`.
+- `agent/focus.py`: `.ics` (`BUTLER_ICS_PATHS`) or `icalBuddy` read-only;
+  `focus.check` suggests focus mode near deep-work blocks + `focus.suggest` bus event.
+- `agent/home.py`: Home Assistant REST (`HASS_URL`+`HASS_TOKEN`), no MQTT dep yet.
+  Tools `home.state`/`home.call`; unconfigured -> hint, never crash.
+- Endpoints: `/api/memory/recall`, `/api/docs/search|summarize`,
+  `/api/vision/capture`, `/api/calendar/next`, `/api/focus`,
+  `/api/home/state|call`. Registry now 21 tools.
 
 ## Phase 5 — Desktop + HUD UI
 - Keep Apple-like `templates/index.html` as fallback.

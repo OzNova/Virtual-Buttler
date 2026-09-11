@@ -134,6 +134,51 @@ def route(text: str) -> AgentDecision:
                 return AgentDecision(ToolCall("web.search", {"query": q, "vertical": vertical}),
                                      f"Searching for '{q.title()}', sir.")
 
+    # ── Phase 4: knowledge / vision / calendar / home ──
+    if re.search(r"\b(summariz\w*|summaris\w*|summary of|tl;dr)\b", clean):
+        return AgentDecision(ToolCall("docs.summarize", {"query": raw}),
+                             f"Looking that up in your documents, sir.",
+                             widget={"kind": "docs", "query": raw})
+    if re.search(r"\b(my|the)\s+(doc|docs|document|pdf|note|notes)\b|in my documents|downloaded.*(pdf|doc)", clean) or \
+            re.search(r"\b(find|search|look).*(note|doc|pdf|file)\b", clean):
+        return AgentDecision(ToolCall("docs.search", {"query": raw}),
+                             f"Searching your documents, sir.",
+                             widget={"kind": "docs", "query": raw})
+    if re.search(r"\b(recall|remember|what did i (ask|say)|my notes|earlier)\b", clean):
+        return AgentDecision(ToolCall("memory.recall", {"query": raw}),
+                             f"Checking my notes, sir.")
+    if re.search(r"\b(capture|what.*on.*screen|on my screen|why.*(error|failing)|screenshot)\b", clean) and \
+            re.search(r"\b(why|what|explain|capture|screen|error)\b", clean):
+        q = raw
+        return AgentDecision(ToolCall("vision.capture", {"question": q}),
+                             f"Capturing the screen, sir.",
+                             widget={"kind": "vision"})
+    if re.search(r"\b(calendar|schedule|appointment|meeting).*\b(next|today|tomorrow|upcoming|when|what)\b|\bwhat.*(meeting|appointment)|\bwhen.*meeting\b", clean):
+        return AgentDecision(ToolCall("calendar.next", {}),
+                             f"Checking your calendar, sir.",
+                             widget={"kind": "calendar"})
+    if re.search(r"\b(focus|deep work|do not disturb|pomodoro|should i focus)\b", clean):
+        return AgentDecision(ToolCall("focus.check", {}),
+                             f"Checking your focus window, sir.",
+                             widget={"kind": "focus"})
+    if re.search(r"\bhome assistant\b|\blight\b|\blamp\b|\bthermostat\b|\bswitch\b", clean):
+        if re.search(r"\b(is|are|status|state|temperature)\b", clean):
+            m = re.search(r"\b([a-z]+\.[a-z0-9_]+)\b", clean)
+            ent = m.group(1) if m else "light.living_room"
+            return AgentDecision(ToolCall("home.state", {"entity_id": ent}),
+                                 f"Checking {ent}, sir.",
+                                 widget={"kind": "home", "entity_id": ent})
+        action = "turn_off" if re.search(r"\b(off|stop|disable)\b", clean) else "turn_on"
+        domain = "climate" if "thermostat" in clean else ("switch" if "switch" in clean else "light")
+        m = re.search(r"\b([a-z]+\.[a-z0-9_]+)\b", clean)
+        ent = m.group(1) if m else ""
+        args = {"domain": domain, "service": action}
+        if ent:
+            args["entity_id"] = ent
+        return AgentDecision(ToolCall("home.call", args),
+                             f"On it, sir.",
+                             widget={"kind": "home"})
+
     # Fallback: chat (Phase 2 LLM plugs in here)
     return AgentDecision(ToolCall("chat.reply", {"text": raw}),
                          "Understood, sir.",
@@ -177,4 +222,20 @@ def speak_for_call(call: ToolCall, raw: str = "") -> tuple[str, dict | None]:
                {"kind": "shopping", "platform": a.get("platform"), "query": a.get("query")}
     if name == "terminal.run":
         return f"Executed '{a.get('command')}' in Terminal, sir.", None
+    if name == "memory.recall":
+        return "Checking my notes, sir.", None
+    if name == "docs.search":
+        return "Searching your documents, sir.", {"kind": "docs", "query": a.get("query", raw)}
+    if name == "docs.summarize":
+        return "Looking that up in your documents, sir.", {"kind": "docs", "query": a.get("query", raw)}
+    if name == "vision.capture":
+        return "Capturing the screen, sir.", {"kind": "vision"}
+    if name == "calendar.next":
+        return "Checking your calendar, sir.", {"kind": "calendar"}
+    if name == "focus.check":
+        return "Checking your focus window, sir.", {"kind": "focus"}
+    if name == "home.state":
+        return f"Checking {a.get('entity_id')}, sir.", {"kind": "home"}
+    if name == "home.call":
+        return "On it, sir.", {"kind": "home"}
     return "Understood, sir.", None
