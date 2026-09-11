@@ -1,12 +1,14 @@
-"""Daily Planner — Desktop App Launcher
-====================================
-Starts the Flask backend and opens the planner in a native macOS
-pywebview window. If webview fails, falls back to the default browser.
+"""Oztudy — Desktop App Launcher
+================================
+Starts the Flask backend on a free local port and opens the planner in a
+native macOS pywebview window. If webview fails, falls back to the default
+browser.
 
 Run:  python3 run_desktop.py    (or double-click the .command file)
 """
 
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -15,8 +17,6 @@ import urllib.request
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 APP_PY = os.path.join(BASE_DIR, "app.py")
-FLASK_URL = "http://127.0.0.1:5000"
-PORT = 5000
 LOG_FILE = os.path.join(BASE_DIR, "error.log")
 
 log_fp = open(LOG_FILE, "a", buffering=1)
@@ -27,28 +27,18 @@ def _log(message):
     print(message, file=log_fp)
 
 
-def _free_port():
-    try:
-        pids = subprocess.run(
-            ["lsof", "-ti", f"tcp:{PORT}"],
-            capture_output=True, text=True, timeout=2,
-        ).stdout.split()
-        if pids:
-            _log(f"[planner] freeing port {PORT}: {', '.join(pids)}")
-            for pid in pids:
-                try:
-                    os.kill(int(pid), 15)
-                except Exception:
-                    pass
-            time.sleep(1)
-    except Exception:
-        pass
+def _pick_port():
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
 
 
-def _server_ready(attempts=60, delay=0.25):
+def _server_ready(url, attempts=60, delay=0.25):
     for _ in range(attempts):
         try:
-            with urllib.request.urlopen(FLASK_URL, timeout=2) as r:
+            with urllib.request.urlopen(url, timeout=2) as r:
                 if r.status == 200:
                     return True
         except Exception:
@@ -57,25 +47,27 @@ def _server_ready(attempts=60, delay=0.25):
 
 
 if __name__ == "__main__":
-    _free_port()
+    port = _pick_port()
+    url = f"http://127.0.0.1:{port}"
+    os.environ["PLANNER_PORT"] = str(port)
 
-    _log(f"[planner] starting {APP_PY} on 127.0.0.1:{PORT}")
+    _log(f"[planner] starting {APP_PY} on {url}")
     server = subprocess.Popen(
         [sys.executable, APP_PY],
         stdout=log_fp, stderr=log_fp, cwd=BASE_DIR,
     )
 
-    if not _server_ready():
-        _log(f"[planner] server did not become ready at {FLASK_URL} — exiting")
+    if not _server_ready(url):
+        _log(f"[planner] server did not become ready at {url} — exiting")
         server.terminate()
         sys.exit(1)
 
-    _log(f"[planner] flask bound to {FLASK_URL}")
+    _log(f"[planner] flask bound to {url}")
 
     try:
         import webview
         webview.create_window(
-            "Daily Planner", FLASK_URL,
+            "Oztudy", url,
             width=1180, height=820, min_size=(980, 700),
             background_color="#F9FAFB",
         )
@@ -84,7 +76,7 @@ if __name__ == "__main__":
         traceback.print_exc(file=sys.stderr)
         traceback.print_exc(file=log_fp)
         _log("[planner] webview unavailable — opening in the default browser")
-        subprocess.run(["open", FLASK_URL], capture_output=True)
+        subprocess.run(["open", url], capture_output=True)
 
     try:
         server.wait()

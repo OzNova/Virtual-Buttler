@@ -1,4 +1,6 @@
+Planner/Oztudy.app/
 Planner/Academic Strategy.app/
+__pycache__/
 Planner/dist/
 Planner/userData/
 Planner/*.log

@@ -6,9 +6,9 @@ OPTIONS = {
     "argv_emulation": True,
     "iconfile": os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "AppIcon.icns"),
     "plist": {
-        "CFBundleName": "Academic Strategy",
-        "CFBundleDisplayName": "Academic Strategy",
-        "CFBundleIdentifier": "com.oznova.academicstrategy",
+        "CFBundleName": "Oztudy",
+        "CFBundleDisplayName": "Oztudy",
+        "CFBundleIdentifier": "com.oznova.oztudy",
         "CFBundleVersion": "1.0.0",
         "CFBundleShortVersionString": "1.0.0",
         "NSHighResolutionCapable": True,
@@ -18,6 +18,6 @@ OPTIONS = {
 
 setup(
     app=APP,
-    name="Academic Strategy",
+    name="Oztudy",
     options={"py2app": OPTIONS},
 )
