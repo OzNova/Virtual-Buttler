@@ -117,5 +117,7 @@ python -m unittest discover -s tests -v
 - `GET /api/tools` — 13 typed tools (JSON Schema, LangGraph-ready)
 - `POST /api/agent {"message":"…"}` — structured `{call, message, widget}`
 - `WS /ws/chat` — chunked `token` + final `result` stream
+- Phase 2: `AGENT_LLM=off|ollama|gemini` (`GET /api/agent/status`), `POST /api/agent/stream` (SSE).
+  Example: `AGENT_LLM=ollama OLLAMA_MODEL=llama3.2:1b python -m server.main` — "a bit quieter" → `system.volume{level:20}`; failures fall back to router
 - Compat REST (`/api/command`, `/api/telemetry`, …) mirrored from Flask
 - See `docs/ROADMAP.md` for Phases 2–5 (LLM calling, voice, RAG/vision, Tauri/HUD).

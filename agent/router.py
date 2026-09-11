@@ -138,3 +138,43 @@ def route(text: str) -> AgentDecision:
     return AgentDecision(ToolCall("chat.reply", {"text": raw}),
                          "Understood, sir.",
                          widget=None)
+
+
+def speak_for_call(call: ToolCall, raw: str = "") -> tuple[str, dict | None]:
+    """Speak text + widget hint for an LLM-produced ToolCall (Phase 2)."""
+    name, a = call.name, call.args or {}
+    if name == "system.telemetry":
+        return "On it, sir.", {"kind": "telemetry"}
+    if name == "system.time":
+        return "On it, sir.", None
+    if name == "system.volume":
+        from .tools import clamp_volume
+        return f"Volume set to {clamp_volume(a.get('level', 50))} percent, sir.", None
+    if name == "system.mute":
+        return ("Audio muted, sir." if a.get("muted") else "Audio unmuted, sir."), None
+    if name == "media.spotify":
+        return {"next": "Playing the next track, sir.",
+                "previous": "Previous track, sir."}.get(a.get("action"), "Toggling the music, sir."), None
+    if name == "apps.open":
+        return f"Opening {str(a.get('target', '')).title()}, sir.", None
+    if name == "folders.open":
+        return f"Opening {a.get('name')} for you, sir.", None
+    if name == "files.create":
+        return f"Created the {a.get('kind')} '{a.get('name')}' on your desktop, sir.", None
+    if name == "web.open_domain":
+        return f"Opening {a.get('domain')}, sir.", None
+    if name == "web.search":
+        q = str(a.get("query", raw))
+        v = a.get("vertical", "web")
+        if v == "video":
+            return f"Opening results for '{q.title()}', sir.", {"kind": "video", "query": q}
+        if v == "images":
+            return f"Showing images of {q.title()}, sir.", {"kind": "images", "query": q}
+        return f"Searching for '{q.title()}', sir.", None
+    if name == "shop.search":
+        return (f"Searching {str(a.get('platform', '')).title()} "
+                f"for '{str(a.get('query', '')).title()}', sir."), \
+               {"kind": "shopping", "platform": a.get("platform"), "query": a.get("query")}
+    if name == "terminal.run":
+        return f"Executed '{a.get('command')}' in Terminal, sir.", None
+    return "Understood, sir.", None

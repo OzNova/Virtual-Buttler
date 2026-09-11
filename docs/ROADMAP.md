@@ -14,10 +14,11 @@ without breaking the working Flask app. Each phase is additive and demoable.
 - Flask `app.py` untouched (legacy on `:5000`). New stack is opt-in:
   `pip install -r requirements-agent.txt && python -m server.main`.
 
-## Phase 2 — LLM tool-calling (next)
-- Ollama/Gemini function-calling behind `AGENT_LLM=off|ollama|gemini`.
-- Fallback to deterministic router. No new keys required for default path.
-- Add `POST /api/agent/stream` (SSE) + WS token streaming.
+## Phase 2 — LLM tool-calling (DONE)
+- `agent/llm.py`: Ollama `/api/chat` tools + Gemini `functionDeclarations`, stdlib-only, timeouts.
+- `agent/decide.py`: LLM first when `AGENT_LLM=ollama|gemini`, else deterministic `route()`; unknown tools/errors fall back.
+- `POST /api/agent` (structured), `POST /api/agent/stream` (SSE token+result), `WS /ws/chat` via `decide()`, `GET /api/agent/status`.
+- `/api/command` stays deterministic for compat. Default `AGENT_LLM=off` (no keys).
 
 ## Phase 3 — Voice pipeline (optional providers)
 - Abstractions: `STTProvider`, `TTSProvider`, `VAD`.

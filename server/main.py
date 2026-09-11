@@ -23,12 +23,14 @@ logger = logging.getLogger("butler-agent")
 
 try:
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-    from fastapi.responses import FileResponse, JSONResponse
+    from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
     from pydantic import BaseModel
 except ImportError:  # pragma: no cover - import error surfaces at runtime with hint
     raise SystemExit("Missing agent deps. Run: pip install -r requirements-agent.txt")
 
+from agent.decide import decide
 from agent.events import BUS
+from agent.llm import gemini_model, mode, ollama_base, ollama_model
 from agent.memory import LongMemory, ShortMemory
 from agent.router import route
 from agent.tools import build_shopping_url, clamp_volume, is_blocked_terminal, list_schemas, sanitize_filename
@@ -357,10 +359,38 @@ def agent_run(payload: AgentIn):
     raw = (payload.message or "").strip()
     if not raw:
         return JSONResponse({"status": "error", "message": "Empty message"}, status_code=400)
-    d = route(raw)
+    if len(raw) > MAX_COMMAND_CHARS:
+        return JSONResponse({"status": "error", "message": "Message too long"}, status_code=400)
+    d = decide(raw, SHORT.snapshot())
     out = execute(d.call.name, d.call.args, raw)
     return {"status": "success", "call": d.call.to_dict(), "message": out["message"],
-            "widget": out.get("widget")}
+            "widget": out.get("widget"), "llm": mode()}
+
+
+@app.get("/api/agent/status")
+def agent_status():
+    return {"status": "success", "llm": mode(), "ollama_base": ollama_base(),
+            "ollama_model": ollama_model(), "gemini_model": gemini_model(),
+            "gemini_key_set": bool(os.getenv("GEMINI_API_KEY"))}
+
+
+@app.post("/api/agent/stream")
+def agent_stream(payload: AgentIn):
+    raw = (payload.message or "").strip()
+    if not raw:
+        return JSONResponse({"status": "error", "message": "Empty message"}, status_code=400)
+
+    def gen():
+        d = decide(raw, SHORT.snapshot())
+        words = (d.speak or "").split() or ["Understood, sir."]
+        for i in range(0, len(words), 4):
+            yield f"event: token\ndata: {' '.join(words[i:i + 4])}\n\n"
+        out = execute(d.call.name, d.call.args, raw)
+        yield ("event: result\ndata: " + __import__("json").dumps(
+            {"message": out["message"], "tool": d.call.to_dict(),
+             "widget": out.get("widget"), "llm": mode()}) + "\n\n")
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 @app.get("/api/widgets")
@@ -381,8 +411,8 @@ async def ws_chat(ws: WebSocket):
             if not raw:
                 await ws.send_json({"type": "error", "message": "Empty command"})
                 continue
-            d = route(raw)
-            # stream speak text in word chunks (Phase 2 will stream LLM tokens)
+            d = decide(raw, SHORT.snapshot())
+            # Phase 2: LLM text streams as word chunks; true token streaming later
             words = d.speak.split()
             for i in range(0, len(words), 4):
                 await ws.send_json({"type": "token", "text": " ".join(words[i:i + 4])})
