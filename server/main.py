@@ -634,6 +634,54 @@ def widgets(kind: str = "telemetry"):
     return {"status": "success", "widget": {"kind": kind}}
 
 
+@app.get("/api/hud/state")
+def hud_state():
+    """Single-roundtrip boot payload for the HUD (Phase 5)."""
+    from agent.focus import focus_check, upcoming
+    from agent.voice import voice_status
+    cal = upcoming()
+    return {"status": "success",
+            "telemetry": gather_telemetry(),
+            "voice": voice_status(),
+            "agent": {"llm": mode(), "tools": len(list_schemas())},
+            "calendar": {"ok": cal.get("ok", False), "events": cal.get("events", [])[:3]},
+            "focus": focus_check()}
+
+
+_SPEAKING = {"on": False}
+
+
+def _track_speaking(_payload: dict | None = None) -> None:
+    _SPEAKING["on"] = True
+
+
+def _untrack_speaking(_payload: dict | None = None) -> None:
+    _SPEAKING["on"] = False
+
+
+try:
+    BUS.on("speak.start", _track_speaking)
+    BUS.on("speak.stop", _untrack_speaking)
+except Exception:
+    pass
+
+
+@app.websocket("/ws/audio")
+async def ws_audio(ws: WebSocket):
+    """Level meter for the R3F orb (Phase 5). 4 Hz: {level 0..1, speaking}."""
+    await ws.accept()
+    try:
+        while True:
+            tel = gather_telemetry()
+            base = (tel.get("cpu") or 0) / 100.0
+            level = round(min(1.0, (0.25 + base * 0.5) if _SPEAKING["on"] else base * 0.35), 3)
+            await ws.send_json({"type": "level", "level": level, "speaking": _SPEAKING["on"],
+                                "cpu": tel.get("cpu")})
+            await asyncio.sleep(0.25)
+    except WebSocketDisconnect:
+        return
+
+
 @app.websocket("/ws/chat")
 async def ws_chat(ws: WebSocket):
     await ws.accept()

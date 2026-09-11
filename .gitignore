@@ -7,3 +7,7 @@ venv/
 *.log
 /tmp/jarvis_server.log
 data/
+hud/node_modules/
+hud/out/
+hud/.next/
+src-tauri/target/

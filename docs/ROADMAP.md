@@ -48,12 +48,15 @@ without breaking the working Flask app. Each phase is additive and demoable.
   `/api/vision/capture`, `/api/calendar/next`, `/api/focus`,
   `/api/home/state|call`. Registry now 21 tools.
 
-## Phase 5 — Desktop + HUD UI
-- Keep Apple-like `templates/index.html` as fallback.
-- New: Next.js + Tailwind + Framer Motion HUD (`/api/widgets` feeds cards),
-  React Three Fiber orb driven by `/ws/audio` levels.
-- Tauri shell: tray, global hotkey `Cmd+Shift+Space`, secure OS bridge.
-- Telemetry graphs (Recharts) from existing `/api/telemetry` polling.
+## Phase 5 — Desktop + HUD UI (DONE, scaffold; runtimes stay optional)
+- `hud/` Next.js 14 + Tailwind + Framer Motion + R3F + Recharts (Apple-quiet,
+  same tokens as `templates/index.html` fallback). `npm run dev` (:3000).
+- `GET /api/hud/state` boot payload + `WS /ws/audio` 4Hz level meter drive
+  the matte R3F orb; `TelemetryChart` polls `/api/telemetry` (Recharts);
+  `WidgetCards` renders agent `widget` JSON (shopping/calendar/focus/...).
+- `src-tauri/` shell: tray (hide-not-quit), `CommandOrControl+Shift+Space`
+  shortcut, `frontendDist ../hud/out`. `cargo tauri dev|build` (icons via
+  `cargo tauri icon`). Backend unchanged: still FastAPI :8000, Flask :5000 kept.
 
 ## Conventions
 - Local-only: bind `127.0.0.1`, no auth, no rate-limit (operator requirement).

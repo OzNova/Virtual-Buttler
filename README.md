@@ -129,3 +129,8 @@ python -m unittest discover -s tests -v
   `BUTLER_DOC_PATHS` allowlist → `/api/docs/search|summarize`;
   `/api/vision/capture` (Gemini describe when key set), `/api/calendar/next`,
   `/api/focus`, `/api/home/state|call` (`HASS_URL`+token). 21 tools total.
+- Phase 5: HUD + desktop scaffold (optional runtimes).
+  `cd hud && npm install && npm run dev` (:3000) + `python -m server.main` (:8000).
+  `GET /api/hud/state`, `WS /ws/audio`, Recharts telemetry, R3F orb, widget cards.
+  `cargo tauri dev` in `src-tauri/` for tray + ⌘⇧Space shell.
+  Flask `templates/index.html` stays the zero-dependency fallback.
